@@ -1,0 +1,83 @@
+{
+  "order_items": {
+    "file": "order_items.csv",
+    "size_bytes": 37894585,
+    "sha256": "03c8bf5030093e649b4f1d8da152e95dda6fbfb53d0978e1a367ff8621651d63",
+    "row_count": 203519,
+    "row_count_ok": true,
+    "missing_columns": [],
+    "extra_columns": [],
+    "blank_counts": {
+      "app_name": 0,
+      "restaurant_id": 0,
+      "creation_time_utc": 0,
+      "order_id": 0,
+      "user_id": 17808,
+      "printed_card_number": 157435,
+      "is_loyalty": 0,
+      "currency": 0,
+      "lineitem_id": 1,
+      "item_category": 1,
+      "item_name": 1,
+      "item_price": 0,
+      "item_quantity": 0
+    },
+    "fully_duplicate_rows": 0,
+    "duplicate_keys": 0,
+    "unparseable_item_price": 0,
+    "unparseable_item_quantity": 0,
+    "unparseable_creation_time_utc": 0,
+    "range_creation_time_utc": [
+      "2020-04-21 18:56:44.244000+00:00",
+      "2024-02-21 02:52:35.366000+00:00"
+    ]
+  },
+  "order_item_options": {
+    "file": "order_item_options.csv",
+    "size_bytes": 17604850,
+    "sha256": "9bd8a388b48d09e00bfef16dbe84b9953d8b59ce416d1af46614626573d0f64d",
+    "row_count": 193017,
+    "row_count_ok": true,
+    "missing_columns": [],
+    "extra_columns": [],
+    "blank_counts": {
+      "order_id": 0,
+      "lineitem_id": 0,
+      "option_group_name": 0,
+      "option_name": 0,
+      "option_price": 0,
+      "option_quantity": 0
+    },
+    "fully_duplicate_rows": 2299,
+    "unparseable_option_price": 0,
+    "unparseable_option_quantity": 0
+  },
+  "date_dim": {
+    "file": "date_dim.csv",
+    "size_bytes": 15901,
+    "sha256": "4168f66d142e8263ee5ed4e223399d62eb7e7eea4c5b5f19f8dbc9c1bf9a1ea1",
+    "row_count": 365,
+    "row_count_ok": true,
+    "missing_columns": [],
+    "extra_columns": [],
+    "blank_counts": {
+      "date_key": 0,
+      "year": 0,
+      "month": 0,
+      "week": 0,
+      "day_of_week": 0,
+      "is_weekend": 0,
+      "is_holiday": 0,
+      "holiday_name": 353
+    },
+    "fully_duplicate_rows": 0,
+    "duplicate_keys": 0,
+    "unparseable_week": 0,
+    "unparseable_year": 0,
+    "unparseable_date_key": 0,
+    "range_date_key": [
+      "2023-01-01 00:00:00+00:00",
+      "2023-12-31 00:00:00+00:00"
+    ]
+  }
+}
