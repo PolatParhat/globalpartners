@@ -93,6 +93,9 @@ globalpartners/
 | 2026-10-04 | Left-join options to line items | 50% of line items have no options |
 | 2026-10-04 | Analysis scope limited to 2023 | SME confirmed; date_dim covers 2023 only |
 | 2026-10-04 | Load all years into raw/cleaned layers; filter to 2023 at metrics layer | Data stays available if scope changes |
+| 2026-10-04 | Working business time zone `America/New_York` (assumption pending SME Q10) | Alltown is a New England chain; only 1 row changes year vs UTC, so low risk |
+| 2026-10-04 | Exclude `Alltown Fresh - DEVELOPMENT` rows from all metrics (826 rows; 700 in 2023) | SME confirmed test data. Kept in raw/cleaned layers with an `is_test_data` flag; filtered at the metrics layer, like the 2023 scope |
+| 2026-10-04 | Step 2 notebook must pass Restart & Run All before commit | Stale outputs hid a NameError (`option_once`); evidence must be reproducible |
 
 ## Source file baseline (Step 1)
 
@@ -112,11 +115,11 @@ globalpartners/
 | 4 | order_items | `order_id + lineitem_id` unique | Confirmed: join key |
 | 6 | order_items | `user_id` blank in 17,808 rows (8.7%) | Open: CLV handling (SME Q4) |
 | 7 | order_items | Blank `printed_card_number` ⇔ `is_loyalty` FALSE, zero exceptions | Resolved: blanks valid |
-| 8 | order_items | 1 malformed row: blank lineitem_id/category/name, quantity 0 | Open: quarantine |
+| 8 | order_items | 1 malformed row: blank lineitem_id/category/name, quantity 0, price $4.39 (2021) | Open: quarantine |
 | 9 | options | Identical options repeated on one line (594 groups on qty-1 lines) | Open: SME Q9 |
 | 10 | date_dim | `holiday_name` blank in 353 rows (12 holidays) | Expected |
 | 11 | order_items | Orders span 2020-04-21 → 2024-02-21; date_dim covers 2023 | Resolved: 2023-only scope |
-| 12 | order_items | 826 rows from `Alltown Fresh - DEVELOPMENT` | Open: SME Q5 |
+| 12 | order_items | 826 rows from `Alltown Fresh - DEVELOPMENT` (741 orders, 115 users, $7,221.54 item revenue) | Resolved: SME confirmed test data; exclude from metrics |
 | 13 | order_items | `Alltown Neighborhood Perks` app, 1,270 rows | Open: SME Q6 |
 | 14 | order_items | 131,328 orders, avg 1.55 items; max 61 | Info |
 | 16 | order_items | 20,174 identified customers | Info |
@@ -125,14 +128,17 @@ globalpartners/
 | 19 | order_items | Currency USD only | Info |
 | 20 | order_items | `lineitem_id` unique across file | Info |
 | 21 | options | `option_quantity` always 1 | Info |
-| 22 | options | Options cover 60% of orders, 50% of line items | Left join required |
+| 22 | options | Options cover 78,600 orders (60%), 102,697 line items (50%), excluding orphans | Left join required |
 | 23 | options | No negative `option_price` values (doc: negative = discount) | Open: SME Q7 |
 | 24 | order_items | Qty 300–500 lines (e.g. $5,000 Korean Kimchi), not test data | Open: SME Q12 |
 | 25 | order_items | 156 regular menu items at $0 | Open: SME Q8 |
 | 27 | order_items | Inconsistent item_name casing/spelling | Open: normalize |
 | 28 | order_items | `item_price` is line total, not unit price | Resolved: revenue = item_price |
-| 29 | options | 28 orphan options | Open: quarantine |
+| 29 | options | 28 orphan options (15 line keys); their order_ids are absent from order_items entirely, ids suggest late Feb 2024 (extract cutoff) | Open: quarantine |
 | 30 | options | Options recorded once per line; `option_price` is a unit price | Info |
+| 31 | order_items | 2023 population (America/New_York): 80,665 lines, 52,641 orders, 10,604 customers, 21 locations, $752,776.30 revenue. After excluding DEVELOPMENT: 79,965 lines, 52,015 orders, 10,513 customers, 20 locations, $746,223.86 | Info |
+| 32 | order_items | In scope (2023, excl. test): 4 Perks rows, 1 $0 item, 0 bulk lines (max qty 27), 0 repeated options on qty-1 lines, 2 name casing variants, 1,136 rows from top-2 user_ids (1,090 from one) | Info: Q6, Q8, Q9, Q12 have little 2023 impact; Q4, Q11 matter |
+| 33 | order_items | 36 item names have casing variants (432 → 396 after lowercasing) | Open: normalize |
 
 ## Open questions for SME
 
@@ -140,7 +146,7 @@ globalpartners/
 2. Data shows `item_price` is the line total, contradicting the doc. Please confirm.
 3. Is `option_price` charged × `item_quantity` (assumption) or once per line? Impact: $12,455.65 (0.67%).
 4. Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue?
-5. Exclude `Alltown Fresh - DEVELOPMENT` orders (826 rows) as test data?
+5. ~~Exclude `Alltown Fresh - DEVELOPMENT` orders (826 rows) as test data?~~ **Answered 2026-10-04: yes, exclude.**
 6. What is the `Alltown Neighborhood Perks` app; include it?
 7. No negative `option_price` values exist. How are discounts represented?
 8. Are the 156 $0 menu items comps, rewards, or discounts?
@@ -160,4 +166,9 @@ globalpartners/
   - Step 2 notebook: profiled columns, outliers, loyalty crosstab, revenue formula tests, option recording, revenue impact
   - SME confirmed 2023-only scope
   - Step 2 findings in `docs/02_data_analysis/Step2_Initial_Data_Analysis.md`
-  - Pending: 2023 order volume (Cell 9)
+  - Initialized git repo; first commit `865e713`
+  - Rebuilt `scripts/step2/data_analysis.ipynb` (48 cells): fixed `option_once` NameError and `pd.DataFrame()` annotation; added typed copies, dataset profile, DQ checks (malformed row, orphans, option coverage, apps, heavy users, bulk lines, item names), line revenue with working formula, 2023 population under UTC vs local time, date_dim coverage
+  - 2023 volume measured (finding 31); date_dim covers every 2023 order date
+  - SME confirmed DEVELOPMENT app rows are test data: exclude from metrics (Q5 closed, finding 12 resolved)
+  - Notebook: added test-data exclusion and in-scope impact cells (50 cells); executed with outputs saved, 0 errors
+  - Step 2 report updated: new section 6 (2023 population + in-scope impact of open findings); finding 12 resolved; Q5 answered; corrected option coverage (102,697 / 78,600), blank user_id (8.75%), all-years revenue ($1,876,434.32); sections renumbered
