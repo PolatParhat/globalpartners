@@ -22,7 +22,7 @@ Learning project built to production standard, following the SME plan in
 |---|---|---|
 | 1 | Download and verify source files | Done |
 | 2 | Initial data analysis | Analysis done; SME questions open |
-| 3 | Pipeline architecture + data model (SME approval) | Not started |
+| 3 | Pipeline architecture + data model (SME approval) | In progress |
 | 4 | Build pipeline on AWS | Not started |
 | 5 | Metrics (CLV, RFM, churn, trends, loyalty, locations, discounts) | Not started |
 | 6 | Streamlit dashboards | Not started |
@@ -95,7 +95,26 @@ globalpartners/
 | 2026-10-04 | Load all years into raw/cleaned layers; filter to 2023 at metrics layer | Data stays available if scope changes |
 | 2026-10-04 | Working business time zone `America/New_York` (assumption pending SME Q10) | Alltown is a New England chain; only 1 row changes year vs UTC, so low risk |
 | 2026-10-04 | Exclude `Alltown Fresh - DEVELOPMENT` rows from all metrics (826 rows; 700 in 2023) | SME confirmed test data. Kept in raw/cleaned layers with an `is_test_data` flag; filtered at the metrics layer, like the 2023 scope |
+| 2026-10-04 | Start Step 3 while SME Q4 and Q11 are pending; design with placeholders | Answers change filters, not architecture. Pipeline flags rows (`is_guest`, `is_non_customer_account`) and reads the rules from a config file, so an SME answer is a config change + gold rerun, not a code change |
+| 2026-10-04 | Placeholder Q4: guests excluded from customer metrics, included in sales/location metrics | Proposed default sent to SME; 4,492 orders (8.6%), $60,247 (8.1%) in scope |
+| 2026-10-04 | Placeholder Q11: account `5ece77fe902ad501337b23fd` excluded from customer metrics, revenue kept in sales totals | Proposed default sent to SME; 937 orders at 15 locations on 54 days in 2023, up to 95/day, would be #1 CLV |
+| 2026-10-04 | Tool selection strictly follows the requirements doc: AWS services, PySpark, SQL Server, Streamlit, GitHub, draw.io only | User instruction. No Terraform, LocalStack, MinIO, Great Expectations, dbt, Snowflake. Local dev uses Docker images of the same components AWS runs |
+| 2026-10-04 | Source DB: Amazon RDS for SQL Server Express (prod); SQL Server 2022 Developer in Docker (local) | Lowest-cost production-realistic option: managed, license included (no new license), encrypted, backed up; 10 GB limit vs 55 MB data. Developer edition is free for non-production use |
+| 2026-10-04 | Orchestration: Apache Airflow on Amazon MWAA (prod); official MWAA Docker image locally | User wants industry-standard Airflow; MWAA is the AWS-managed service, so it satisfies "AWS resources only". Replaces the earlier Step Functions proposal. Cost: small env ~$0.49/h (~$360/mo 24/7), so the prod environment is created only when needed and destroyed with IaC |
+| 2026-10-04 | Local-first: build and test the whole pipeline locally in Docker, then promote to AWS via GitHub CI/CD | Same code and images in both; only config (paths, catalog, credentials, operators) differs per environment (`PIPELINE_ENV=local|prod`) |
+| 2026-10-04 | Transform compute: AWS Glue 5.1 (Spark 3.5.6, Python 3.11); pipeline code targets Python 3.11 | SME requires PySpark; Glue is serverless (no cluster). The Step 1-2 `.venv` (3.13) stays for analysis only |
+| 2026-10-04 | Lake table format: Apache Iceberg on S3, registered in Glue Data Catalog, queried with Athena | Native in Glue 5.1 (Iceberg 1.10) and Athena, so no extra tool. ACID writes, MERGE for idempotent reruns, time travel to roll back a bad load (failure reload requirement) |
+| 2026-10-04 | Infrastructure as code: AWS CDK (Python) | AWS-native (Terraform is an external tool), same language as the pipeline, deploys through CloudFormation with rollback |
+| 2026-10-04 | Two versions: v1 = AWS CDK on `main` (the submission); v2 = Terraform on a separate branch (`iac/terraform`), built after v1 works | Learning goal: compare both IaC tools. v2 deviates from the SME's no-external-tools rule, so it is never merged to `main` or submitted. Pipeline code, DAGs and config are shared; only `infra/` differs |
+| 2026-10-04 | Medallion layers on Iceberg: bronze (raw copy), silver (clean, typed, flagged), gold (star schema + metrics) | Rebuild silver/gold from bronze without touching the source; each layer has one job |
+| 2026-10-04 | Incremental extract: watermark on `creation_time_utc` + 3-day lookback; `date_dim` full load | Data grows daily; lookback catches late-arriving rows (e.g. the 28 orphan options) |
+| 2026-10-04 | Bronze append-only with audit columns (`_batch_id`, `_ingested_at`, `_source_table`); silver/gold written with MERGE | Idempotent reruns: a retry or backfill never duplicates rows (failure reload requirement) |
+| 2026-10-04 | Bad rows go to `silver.quarantine` with a reason; every run logged in `ops.pipeline_runs`; watermarks in `ops.watermarks` | Never crash on bad data; full audit trail from dashboard number back to run and source |
+| 2026-10-04 | Business rules in `config/business_rules.yaml` (excluded apps, non-customer ids, guest handling) | SME answers become config changes |
+| 2026-10-04 | Replay script simulates daily order arrivals into SQL Server | Source data is a static snapshot; replay shows real incremental daily runs and daily-evolving CLV |
 | 2026-10-04 | Step 2 notebook must pass Restart & Run All before commit | Stale outputs hid a NameError (`option_once`); evidence must be reproducible |
+| 2026-10-05 | Q11 confirmed: account `5ece77fe902ad501337b23fd` excluded from customer metrics (CLV, RFM, churn, High-CLV threshold, customer counts); revenue kept in sales/location totals | SME confirmed findings: faulty data, not a real customer. Flagged `is_non_customer_account` in silver; id listed in `config/business_rules.yaml`. Assumes the sales are real but wrongly attributed; if SME says the orders never happened, drop from sales too (config change) |
+| 2026-10-05 | No other non-customer accounts assumed (SME Q11 part 3 unanswered) | Config list can be extended without code change |
 
 ## Source file baseline (Step 1)
 
@@ -123,7 +142,7 @@ globalpartners/
 | 13 | order_items | `Alltown Neighborhood Perks` app, 1,270 rows | Open: SME Q6 |
 | 14 | order_items | 131,328 orders, avg 1.55 items; max 61 | Info |
 | 16 | order_items | 20,174 identified customers | Info |
-| 17 | order_items | Two user_ids with 2,400+ line items | Open: SME Q11 |
+| 17 | order_items | Two user_ids with 2,400+ line items | Resolved: SME confirmed `5ece77fe…` is faulty data (non-customer), excluded from customer metrics; `5f1b00e5…` is a normal customer in 2023 (42 orders, $466) |
 | 18 | all | Booleans stored as "TRUE"/"FALSE" strings | Pipeline converts to boolean |
 | 19 | order_items | Currency USD only | Info |
 | 20 | order_items | `lineitem_id` unique across file | Info |
@@ -139,20 +158,22 @@ globalpartners/
 | 31 | order_items | 2023 population (America/New_York): 80,665 lines, 52,641 orders, 10,604 customers, 21 locations, $752,776.30 revenue. After excluding DEVELOPMENT: 79,965 lines, 52,015 orders, 10,513 customers, 20 locations, $746,223.86 | Info |
 | 32 | order_items | In scope (2023, excl. test): 4 Perks rows, 1 $0 item, 0 bulk lines (max qty 27), 0 repeated options on qty-1 lines, 2 name casing variants, 1,136 rows from top-2 user_ids (1,090 from one) | Info: Q6, Q8, Q9, Q12 have little 2023 impact; Q4, Q11 matter |
 | 33 | order_items | 36 item names have casing variants (432 → 396 after lowercasing) | Open: normalize |
+| 34 | order_items | `item_category` corrupted with pasted admin URLs in 98 rows (96 in scope), 3 values, e.g. `Drip Chttps://www.opendining.net/...#offee`; removing the URL fragment always yields an existing valid category | Open: fix in silver with regex (`https?://\S*?#` → ""); not yet in Step 2 notebook/report |
+| 35 | order_items | Loyalty status changes per customer: in scope, 1,914 of 10,513 customers (18%) have both loyalty and non-loyalty orders; 1,809 of them started non-loyalty (i.e. joined later); max 9 switches | Info: model loyalty as of each day, not as a fixed customer attribute; not yet in Step 2 notebook/report |
 
 ## Open questions for SME
 
 1. Is `restaurant_id` the `location_id` referenced in Step 5?
 2. Data shows `item_price` is the line total, contradicting the doc. Please confirm.
 3. Is `option_price` charged × `item_quantity` (assumption) or once per line? Impact: $12,455.65 (0.67%).
-4. Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue?
+4. Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue? *(Draft sent 2026-10-04; placeholder = yes)*
 5. ~~Exclude `Alltown Fresh - DEVELOPMENT` orders (826 rows) as test data?~~ **Answered 2026-10-04: yes, exclude.**
 6. What is the `Alltown Neighborhood Perks` app; include it?
 7. No negative `option_price` values exist. How are discounts represented?
 8. Are the 156 $0 menu items comps, rewards, or discounts?
 9. Are repeated identical options on one line item extras or duplicate errors?
 10. Which time zone defines the business day (timestamps are UTC)?
-11. Are the two user_ids with 2,400+ line items real customers?
+11. ~~Are the two user_ids with 2,400+ line items real customers?~~ **Answered 2026-10-05: `5ece77fe…` is faulty data, not a real customer; exclude from customer metrics, keep revenue in sales. No other non-customer accounts named.**
 12. Are qty 300–500 lines legitimate (catering, bulk)?
 
 ## Change log
@@ -172,3 +193,13 @@ globalpartners/
   - SME confirmed DEVELOPMENT app rows are test data: exclude from metrics (Q5 closed, finding 12 resolved)
   - Notebook: added test-data exclusion and in-scope impact cells (50 cells); executed with outputs saved, 0 errors
   - Step 2 report updated: new section 6 (2023 population + in-scope impact of open findings); finding 12 resolved; Q5 answered; corrected option coverage (102,697 / 78,600), blank user_id (8.75%), all-years revenue ($1,876,434.32); sections renumbered
+  - Drafted SME questions Q4 (guest orders) and Q11 (heavy accounts) with in-scope evidence
+  - Step 3 started with placeholders for Q4 and Q11
+  - Step 3.1 tech decisions: tool selection per requirements doc, RDS SQL Server Express, MWAA (Airflow), local-first Docker, Glue 5.1, Iceberg, CDK
+  - Decided two IaC versions: v1 CDK on `main` (focus now), v2 Terraform on branch `iac/terraform` later
+  - Step 3.2 data flow confirmed: medallion on Iceberg, incremental + lookback, MERGE, quarantine, audit tables, config rules, replay script
+  - Step 3.3 prep: found findings 34 (URL-corrupted item_category) and 35 (customers' loyalty status changes over time)
+- **2026-10-05**
+  - SME answered Q11: `5ece77fe…` confirmed faulty data; Q11 placeholder becomes the confirmed rule; finding 17 resolved
+  - Q11 part 3 (other non-customer accounts) unanswered: assume none
+  - Remaining Step 3 placeholder: Q4 (guest orders)
