@@ -115,6 +115,12 @@ globalpartners/
 | 2026-10-04 | Step 2 notebook must pass Restart & Run All before commit | Stale outputs hid a NameError (`option_once`); evidence must be reproducible |
 | 2026-10-05 | Q11 confirmed: account `5ece77fe902ad501337b23fd` excluded from customer metrics (CLV, RFM, churn, High-CLV threshold, customer counts); revenue kept in sales/location totals | SME confirmed findings: faulty data, not a real customer. Flagged `is_non_customer_account` in silver; id listed in `config/business_rules.yaml`. Assumes the sales are real but wrongly attributed; if SME says the orders never happened, drop from sales too (config change) |
 | 2026-10-05 | No other non-customer accounts assumed (SME Q11 part 3 unanswered) | Config list can be extended without code change |
+| 2026-10-06 | Step 3.3 data model approved: silver = `order_items`, `order_item_options`, `date_dim`, `quarantine` (same grain as source, typed, cleaned, flagged); gold star schema = `fact_order_line` (1 row per order line), `fact_order` (1 row per order), `dim_customer`, `dim_location`, `dim_item`, `dim_app`, `dim_date`; gold metrics = `customer_daily_snapshot` (customer × day), `sales_daily` (date × location × category × hour) | Primary goal (CLV evolving daily) needs a per-day snapshot; facts at two grains so order-level metrics (AOV, frequency, recency) never count item lines as orders. Loyalty and discount analysis are queries over `fact_order` + snapshot |
+| 2026-10-06 | Natural keys (`user_id`, `restaurant_id`, `order_id + lineitem_id`); hash key for items (clean name + category); guests get `customer_id = 'GUEST'` with one GUEST row in `dim_customer` | Generated integer surrogate keys are not stable across Spark reruns and would break idempotent MERGE. A blank key would silently drop guest revenue from joins |
+| 2026-10-06 | Loyalty kept per order on the facts and "as of that day" in the snapshot; no SCD Type 2 | Every order already records `is_loyalty` (finding 35), so the history exists without versioned customer rows |
+| 2026-10-06 | `customer_daily_snapshot` is dense: one row per customer for every day from first order | Recency, churn status and tiers change on days with no orders; a sparse table could not show a customer drifting into "at risk". ~3.8 M rows for 2023 in-scope customers |
+| 2026-10-06 | CLV = historical spend to date (no forecast); tiers High top 20 % / Medium mid 60 % / Low bottom 20 %, re-ranked daily among in-scope customers; RFM window N = 90 days; churn "at risk" > 45 days; all thresholds in config | Requirements doc defines CLV as aggregate total spend per customer and gives no prediction method; 45 days is the doc's example threshold |
+| 2026-10-06 | `dim_date` generated in PySpark for the full order range (2020–2024); holiday flags taken from source `date_dim` where available (2023), null otherwise | All years are loaded but source `date_dim` covers 2023 only; without generated dates, pre-2023 facts would have no matching date |
 
 ## Source file baseline (Step 1)
 
@@ -203,3 +209,7 @@ globalpartners/
   - SME answered Q11: `5ece77fe…` confirmed faulty data; Q11 placeholder becomes the confirmed rule; finding 17 resolved
   - Q11 part 3 (other non-customer accounts) unanswered: assume none
   - Remaining Step 3 placeholder: Q4 (guest orders)
+- **2026-10-06**
+  - Step 3.3 data model walkthrough: real order `64d3b041…` and customer `642d6946…` (6 orders, $74.94 CLV in 2023) traced through the source files; concepts (grain, bronze/silver/gold, fact vs dimension, star schema, keys, snapshot, RFM, SCD2) explained on a 5-row toy dataset
+  - Approved 5 data-model decisions: natural keys + GUEST row, loyalty on facts/snapshot (no SCD2), dense daily snapshot, historical CLV with 90-day RFM and 45-day churn, generated `dim_date`
+  - Next: column-by-column design of `silver.order_items`
