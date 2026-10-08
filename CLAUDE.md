@@ -126,7 +126,14 @@ globalpartners/
 | 2026-10-07 | (C) Extract from SQL Server with a Glue PySpark job over JDBC (TLS, `encrypt=true`); password from Secrets Manager | Keeps all logic in PySpark, one tool for every step; DMS would add a service with non-PySpark logic |
 | 2026-10-07 | (D) Final DAG step runs PySpark data-quality checks (row-count reconciliation, revenue tie-out across facts/aggregates, unique and non-null keys, quarantine rate); results in `ops.dq_results`; a failed check fails the run | Quarantine catches bad rows; DQ checks catch bad loads. Dashboard keeps the last good data. Great Expectations excluded by the tool rule |
 | 2026-10-07 | `ops` database holds pipeline bookkeeping: `ops.watermarks`, `ops.pipeline_runs`, `ops.dq_results` | Separates data about the pipeline from business data |
-| 2026-10-07 | Cost estimate in `docs/03_architecture/cost_estimate.md` (us-east-1 list prices from the AWS Price List API) | As designed 24/7 ≈ $455/mo (79 % idle provisioned MWAA); optimized 24/7 ≈ $96/mo; deploy-only-when-needed ≈ $11/mo working, ≈ $2 idle; local $0 |
+| 2026-10-07 | Cost estimate in `docs/03_architecture/cost_estimate.md` (us-east-1 list prices from the AWS Price List API) | As designed 24/7 ≈ $455/mo (79 % idle MWAA small); optimized 24/7 ≈ $307/mo; chosen setup ≈ $22 per working month (40 h deployed), ≈ $2 idle; local $0 |
+| 2026-10-07 | (E) Provisioned MWAA **micro** environment, created and destroyed with `PipelineStack`; not MWAA Serverless | Serverless (≈ $1/mo) would mean YAML DAGs, Airflow 3 and no Airflow UI in AWS. Provisioned keeps Python DAGs + UI (industry standard, matches the official local MWAA image) for ≈ $12 more per working month. Full deploy ≈ 40 min |
+| 2026-10-07 | (F) AWS region us-east-1 | 10–14 % cheaper than us-west-1 (the local CLI default); new features first. Set region explicitly in CDK and CLI profile |
+| 2026-10-07 | (G) Two CDK stacks: permanent `DataStack` (S3 lake, KMS key, ECR, RDS snapshot) + disposable `PipelineStack` (VPC, NAT, RDS, Glue, MWAA, Fargate, ALB, alarms), deployed only for testing/demos; one always-on week before submission (≈ $71) | Stateful/stateless split is standard practice; rebuild-from-code proves IaC completeness; final week shows unattended daily operation |
+| 2026-10-07 | (H) Glue Flex execution class for scheduled daily jobs, configurable per job | −34 % on Glue; standard class for urgent reruns |
+| 2026-10-07 | (I) Full 2023 replay runs locally; on AWS one full initial load + ~14-day replay | Full replay on AWS ≈ $104–131 and ~5 days; backfill skills learned locally for free |
+| 2026-10-07 | Stay on Glue 5.1 (not 6.0) | Glue 6.0 (Spark 4.1, Python 3.13, 30 % cheaper) has no local Docker image yet; newest is `aws-glue-libs:5.1.0`. Revisit when published |
+| 2026-10-07 | Free cost guardrails: AWS Budgets alert $20/mo, Cost Anomaly Detection, tags `project`/`env`/`stack` on every resource | Catch forgotten resources early |
 
 ## Source file baseline (Step 1)
 
@@ -223,5 +230,5 @@ globalpartners/
   - Pipeline diagram walkthrough (12 components); explained ops tables, DQ checks, TLS, OIDC
   - Approved A (Streamlit on ECS Fargate), B (CloudWatch + SNS alerts), C (Glue JDBC extract), D (DQ check step + `ops.dq_results`)
   - Wrote `docs/03_architecture/cost_estimate.md`; found Glue 6.0 (30 % cheaper, Python 3.13) has no local Docker image yet, and MWAA Serverless (≈ $1/mo vs $212–358/mo provisioned)
-  - Pending user decisions from the cost estimate: E MWAA Serverless (YAML DAGs, Airflow 3, no AWS Airflow UI), F region us-east-1 (CLI default is us-west-1), G two CDK stacks (permanent DataStack + disposable PipelineStack), H Glue Flex, I full-year replay locally; plus free cost guardrails (Budgets, Anomaly Detection, tags)
+  - Approved E–I: provisioned MWAA micro in disposable PipelineStack (changed from Serverless recommendation after weighing production learning), us-east-1, two CDK stacks + one always-on week, Glue Flex, full replay locally; cost estimate updated (≈ $22 working month, ≈ $71 final week)
   - Next: draw the pipeline diagram in draw.io (`docs/03_architecture/pipeline_architecture.drawio` + PNG)
