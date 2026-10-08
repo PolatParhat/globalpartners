@@ -121,6 +121,12 @@ globalpartners/
 | 2026-10-06 | `customer_daily_snapshot` is dense: one row per customer for every day from first order | Recency, churn status and tiers change on days with no orders; a sparse table could not show a customer drifting into "at risk". ~3.8 M rows for 2023 in-scope customers |
 | 2026-10-06 | CLV = historical spend to date (no forecast); tiers High top 20 % / Medium mid 60 % / Low bottom 20 %, re-ranked daily among in-scope customers; RFM window N = 90 days; churn "at risk" > 45 days; all thresholds in config | Requirements doc defines CLV as aggregate total spend per customer and gives no prediction method; 45 days is the doc's example threshold |
 | 2026-10-06 | `dim_date` generated in PySpark for the full order range (2020–2024); holiday flags taken from source `date_dim` where available (2023), null otherwise | All years are loaded but source `date_dim` covers 2023 only; without generated dates, pre-2023 facts would have no matching date |
+| 2026-10-07 | (A) Streamlit dashboard runs on Amazon ECS Fargate; same Docker image locally | No server to patch; can be scaled to 0 when not demoing |
+| 2026-10-07 | (B) Failure alerts: CloudWatch alarms → SNS email | Production standard; failed runs must not go unnoticed |
+| 2026-10-07 | (C) Extract from SQL Server with a Glue PySpark job over JDBC (TLS, `encrypt=true`); password from Secrets Manager | Keeps all logic in PySpark, one tool for every step; DMS would add a service with non-PySpark logic |
+| 2026-10-07 | (D) Final DAG step runs PySpark data-quality checks (row-count reconciliation, revenue tie-out across facts/aggregates, unique and non-null keys, quarantine rate); results in `ops.dq_results`; a failed check fails the run | Quarantine catches bad rows; DQ checks catch bad loads. Dashboard keeps the last good data. Great Expectations excluded by the tool rule |
+| 2026-10-07 | `ops` database holds pipeline bookkeeping: `ops.watermarks`, `ops.pipeline_runs`, `ops.dq_results` | Separates data about the pipeline from business data |
+| 2026-10-07 | Cost estimate in `docs/03_architecture/cost_estimate.md` (us-east-1 list prices from the AWS Price List API) | As designed 24/7 ≈ $455/mo (79 % idle provisioned MWAA); optimized 24/7 ≈ $96/mo; deploy-only-when-needed ≈ $11/mo working, ≈ $2 idle; local $0 |
 
 ## Source file baseline (Step 1)
 
@@ -213,3 +219,9 @@ globalpartners/
   - Step 3.3 data model walkthrough: real order `64d3b041…` and customer `642d6946…` (6 orders, $74.94 CLV in 2023) traced through the source files; concepts (grain, bronze/silver/gold, fact vs dimension, star schema, keys, snapshot, RFM, SCD2) explained on a 5-row toy dataset
   - Approved 5 data-model decisions: natural keys + GUEST row, loyalty on facts/snapshot (no SCD2), dense daily snapshot, historical CLV with 90-day RFM and 45-day churn, generated `dim_date`
   - Next: column-by-column design of `silver.order_items`
+- **2026-10-07**
+  - Pipeline diagram walkthrough (12 components); explained ops tables, DQ checks, TLS, OIDC
+  - Approved A (Streamlit on ECS Fargate), B (CloudWatch + SNS alerts), C (Glue JDBC extract), D (DQ check step + `ops.dq_results`)
+  - Wrote `docs/03_architecture/cost_estimate.md`; found Glue 6.0 (30 % cheaper, Python 3.13) has no local Docker image yet, and MWAA Serverless (≈ $1/mo vs $212–358/mo provisioned)
+  - Pending user decisions from the cost estimate: E MWAA Serverless (YAML DAGs, Airflow 3, no AWS Airflow UI), F region us-east-1 (CLI default is us-west-1), G two CDK stacks (permanent DataStack + disposable PipelineStack), H Glue Flex, I full-year replay locally; plus free cost guardrails (Budgets, Anomaly Detection, tags)
+  - Next: draw the pipeline diagram in draw.io (`docs/03_architecture/pipeline_architecture.drawio` + PNG)
