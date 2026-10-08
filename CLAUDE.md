@@ -231,4 +231,9 @@ globalpartners/
   - Approved A (Streamlit on ECS Fargate), B (CloudWatch + SNS alerts), C (Glue JDBC extract), D (DQ check step + `ops.dq_results`)
   - Wrote `docs/03_architecture/cost_estimate.md`; found Glue 6.0 (30 % cheaper, Python 3.13) has no local Docker image yet, and MWAA Serverless (≈ $1/mo vs $212–358/mo provisioned)
   - Approved E–I: provisioned MWAA micro in disposable PipelineStack (changed from Serverless recommendation after weighing production learning), us-east-1, two CDK stacks + one always-on week, Glue Flex, full replay locally; cost estimate updated (≈ $22 working month, ≈ $71 final week)
-  - Next: draw the pipeline diagram in draw.io (`docs/03_architecture/pipeline_architecture.drawio` + PNG)
+- **2026-10-08**
+  - Pipeline architecture diagram drawn in draw.io by the user: `docs/03_architecture/global-partner-pipeline-architecture.drawio` + `.png` (commit `bd9f142`)
+  - Reviewed in 3 rounds against SME requirements (SQL Server, AWS only, PySpark, scheduling, encryption, failure reload, CI/CD + OIDC): all visible. Fixes made: MWAA connected to the control line and the 5 Glue jobs, OIDC label, light-mode colours, title, gold_metrics two-way arrow, label typos
+  - Optional cosmetics left: 3 labels crossed by lines, 3 ops arrows black instead of grey, catalog bar fill
+  - Lesson: draw.io dark mode saves colours as `light-dark()` pairs that turn black in light-mode exports; draw in light mode
+  - Next: Step 3.3 `silver.order_items` column spec
