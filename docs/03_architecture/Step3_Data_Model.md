@@ -5,6 +5,8 @@ GlobalPartners Business Insights Pipeline. Draft, last updated 2026-10-09.
 This document specifies every table the pipeline writes. It becomes the data-model
 section of the Step 3 solution design document.
 
+**Diagram:** `global-partner-data-model.drawio` (gold star schema: facts, dimensions, metric tables).
+
 | Layer | Table | Status |
 |---|---|---|
 | Silver | `silver.order_items` | Approved 2026-10-09 |
