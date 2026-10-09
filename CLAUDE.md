@@ -142,6 +142,13 @@ globalpartners/
 | 2026-10-09 | Quarantine (broken rows): missing key/restaurant, bad timestamp, price not number or < 0, quantity not whole or < 1, `is_loyalty` not TRUE/FALSE, currency not USD. Today: 1 row (finding 8). `$0` items and bulk lines stay as normal rows | Quarantine = row unusable; flag = valid row a business rule may exclude |
 | 2026-10-09 | Silver dedup: keep newest `_ingested_at` per key; MERGE updates only when `_row_hash` (SHA-256 of business columns) changed; no partitioning on silver | Lookback re-reads rows; ~200k rows is too small to partition (small-files problem) |
 | 2026-10-09 | Money columns are `DECIMAL(10,2)`, never float | Sums must be exact to the cent |
+| 2026-10-09 | `silver.order_item_options` key: `option_key` = SHA-256(order_id, lineitem_id, group, name, price, `option_seq`), `option_seq` = copy number among identical rows within a batch | Source has no option id; 2,915 rows are exact copies (616 groups, max 10, 0 in 2023). Numbering identical copies is deterministic, so lookback re-reads match existing keys |
+| 2026-10-09 | Options extracted through their parent order: options of every order in the order-items window (watermark − 3 days) | Options table has no timestamp; line and options always arrive in the same batch. Adds to the 3.2 extract design |
+| 2026-10-09 | Orphan options (parent line not in silver) quarantined (28 rows today); DQ step counts orphans directly in SQL Server | Parent-based daily extract cannot see orphans (finding 29) |
+| 2026-10-09 | Negative `option_price` allowed and flagged `is_discount` (0 today); repeated copies kept and flagged `is_repeated_option`, gold counts each copy by default with a config switch (Q9) | Requirements define negative prices as discounts; Q9 open |
+| 2026-10-09 | Option revenue computed in gold, not silver | Needs `item_quantity` from the parent line |
+| 2026-10-09 | Known limitations recorded: source deletes not detected (CDC out of scope); options added > 3 days after the order would be missed | Documented for the production-rollout section |
+| 2026-10-09 | Specs collected in `docs/03_architecture/Step3_Data_Model.md` (becomes the data-model section of the solution design doc) | Approved specs must live in an SME-facing document, not only in chat/CLAUDE.md |
 
 ## Source file baseline (Step 1)
 
@@ -247,4 +254,5 @@ globalpartners/
   - Next: Step 3.3 `silver.order_items` column spec
 - **2026-10-09**
   - `silver.order_items` spec approved (rules measured on real data: 1 row quarantined; flags 2023/all: guest 6,395/17,808, test 700/826, non-customer 1,090/2,454)
-  - Next: `silver.order_item_options` spec
+  - `silver.order_item_options` spec approved; found options have no timestamp (extract through parent order) and no unique id (SHA-256 key with copy number)
+  - Created `docs/03_architecture/Step3_Data_Model.md` with both approved silver specs; proposed `silver.date_dim` (found `week` is the ISO week: 1–2 Jan 2023 = week 52) and `silver.quarantine` (MERGE on source_table + record_hash, sightings counted, status open/resolved)
