@@ -97,7 +97,7 @@ Rules that catch nothing today protect against future bad data from the source.
 | `is_non_customer_account` | 1,090 | 2,454 |
 | `is_category_repaired` | | 98 |
 
-Not flagged, kept as normal rows until the SME decides: $0 menu items (SME Q8; 1 row in 2023, 156 in all years) and lines with quantity ≥ 100 (SME Q12; 0 in 2023, 9 in all years).
+Not flagged, kept as normal rows until the SME decides: $0 menu items (SME Q8; 1 line in 2023). Bulk lines do not occur in 2023 (maximum quantity 27).
 
 ### Data-quality check (run by the DQ step, not per row)
 
@@ -120,8 +120,8 @@ up to 10 copies; 594 groups on quantity-1 lines; **0 in 2023**). Identical copie
 
 Identical copies cannot be told apart, so the numbering always produces the same set of keys.
 A re-read by the lookback therefore matches the existing keys and creates no duplicates.
-Whether repeated copies are real extras or recording errors is SME **Q9**: silver keeps and
-flags them; gold counts each copy by default, switchable in config.
+No repeated copies occur in 2023 orders; silver keeps and flags any that arrive, and gold counts
+each copy (switchable in config).
 
 ### Incremental extract
 
@@ -143,7 +143,7 @@ its options always arrive in the same batch.
 | 8 | `option_seq` | int | copy number among identical rows |
 | 9 | `option_key` | string | unique key (above) |
 | 10 | `is_discount` | boolean | `option_price < 0` |
-| 11 | `is_repeated_option` | boolean | row belongs to a group of identical copies (Q9) |
+| 11 | `is_repeated_option` | boolean | row belongs to a group of identical copies (0 in 2023) |
 | 12–15 | `_batch_id`, `_ingested_at`, `_row_hash`, `_silver_updated_at` | | audit |
 
 Option revenue (`option_price × item_quantity`, SME Q3 assumption) needs the item quantity,
@@ -224,7 +224,7 @@ loaded business date (dense: days without orders included, because recency, chur
 tiers change on those days too). **Key:** `snapshot_date + customer_id`.
 
 **Population (from config):** orders in the reporting scope (2023), excluding test data, guest
-orders and non-customer accounts. **CLV counts in-scope (2023) orders only** (assumption, SME Q14).
+orders and non-customer accounts. **CLV counts 2023 orders only** (the confirmed reporting scope).
 
 **Size for 2023:** 10,512 customers, 46,586 orders, $673,614.04 CLV at year end,
 **2,283,740 rows**. 49 % of customers ordered once.
@@ -315,7 +315,7 @@ left-joined to its options. 203,518 rows (all years); 79,965 in the 2023 reporti
 | `item_quantity` | |
 | `item_revenue` | `item_price` (line total) |
 | `option_count` | options on the line |
-| `option_revenue` | Σ `option_price × item_quantity` (SME Q3 assumption). Repeated identical options counted each (config `repeated_options: count_each`, switch `count_once` for SME Q9) |
+| `option_revenue` | Σ `option_price × item_quantity` (SME Q3 assumption). Repeated identical options counted each (config `repeated_options: count_each`; none in 2023) |
 | `discount_amount` | Σ negative option amounts ($0 today, see section 11) |
 | `line_revenue` | `item_revenue + option_revenue` |
 | `has_discount` | `discount_amount < 0` |

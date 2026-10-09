@@ -152,7 +152,7 @@ globalpartners/
 | 2026-10-09 | `silver.date_dim` approved: typed copy, full reload, `week` renamed `iso_week`; gold date dimension adds ISO year | Source week is ISO 8601: 1–2 Jan 2023 are week 52 of ISO year 2022; grouping by year + week would mix them with late December |
 | 2026-10-09 | `silver.quarantine` approved: one table for all sources, MERGE on `source_table + record_hash`, `times_seen`, first/last seen, `status` open/resolved | Lookback re-reads broken rows daily; append would duplicate them. Expected after first load: 29 rows |
 | 2026-10-09 | `customer_daily_snapshot` approved: customer × day, dense from first in-scope order, 2,283,740 rows for 2023 (10,512 customers, $673,614.04) | Primary goal: CLV evolving daily |
-| 2026-10-09 | CLV = in-scope (2023) spend to date only; pre-2023 spend excluded (config; SME Q14) | SME scope is 2023 |
+| 2026-10-09 | CLV = 2023 spend to date only | User decision: work on 2023 orders only; not an SME question |
 | 2026-10-09 | CLV tier by `cume_dist`, re-ranked daily, ties share a tier (≈ not exactly 20/60/20) | 311 customers tie at $10.99 at the Low cut-off |
 | 2026-10-09 | Churn status active ≤ 45 / at_risk 46–90 / lapsed > 90 days (SME Q13) | Single > 45-day rule flags 77 % (8,103) at year end; 49 % are one-time buyers |
 | 2026-10-09 | RFM fixed bands from config (R days 7/30/45/90; F orders 0/1/2/3–5/6+; M $0/15/30/60) and segments VIP / New / Churn Risk / Regular | Quintiles impossible: 82.5 % have 0–1 orders in 90 days; fixed bands are stable over time |
@@ -164,6 +164,7 @@ globalpartners/
 | 2026-10-09 | Two sales aggregates: `sales_daily` (date × location × hour, from fact_order, includes order counts) and `sales_daily_category` (date × location × category, from fact_order_line, no order counts); sums only, ratios computed after summing | 24.5 % of 2023 orders span categories: order counts are non-additive across categories |
 | 2026-10-09 | `dim_location.is_test_location` (1 location has only test orders); `location_name` empty pending SME Q15 | Source has ids only |
 | 2026-10-09 | Design doc states discount analysis is empty until SME Q7 | No negative option prices exist |
+| 2026-10-09 | SME questions and their impact figures are 2023-only; questions with no 2023 rows are not asked (Q9, Q12); Q14 removed | User instruction: work only on 2023 orders |
 
 ## Source file baseline (Step 1)
 
@@ -213,20 +214,20 @@ globalpartners/
 ## Open questions for SME
 
 1. Is `restaurant_id` the `location_id` referenced in Step 5?
-2. Data shows `item_price` is the line total, contradicting the doc. Please confirm.
-3. Is `option_price` charged × `item_quantity` (assumption) or once per line? Impact: $12,455.65 (0.67%).
+2. Data shows `item_price` is the line total, contradicting the doc. Please confirm. (2023: 5,127 multi-quantity lines, none priced as a unit price.)
+3. Is `option_price` charged × `item_quantity` (assumption) or once per line? 2023 impact: $2,739.90 (0.37 %).
 4. Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue? *(Draft sent 2026-10-04; placeholder = yes)*
 5. ~~Exclude `Alltown Fresh - DEVELOPMENT` orders (826 rows) as test data?~~ **Answered 2026-10-04: yes, exclude.**
-6. What is the `Alltown Neighborhood Perks` app; include it?
+6. What is the `Alltown Neighborhood Perks` app; include it? (2023: 4 lines, 3 orders.)
 7. No negative `option_price` values exist. How are discounts represented?
-8. Are the 156 $0 menu items comps, rewards, or discounts?
-9. Are repeated identical options on one line item extras or duplicate errors?
+8. Is the $0 menu item a comp, reward, or discount? (2023: 1 line.)
+9. ~~Are repeated identical options on one line item extras or duplicate errors?~~ **Not asked: 0 cases in 2023.**
 10. Which time zone defines the business day (timestamps are UTC)?
 11. ~~Are the two user_ids with 2,400+ line items real customers?~~ **Answered 2026-10-05: `5ece77fe…` is faulty data, not a real customer; exclude from customer metrics, keep revenue in sales. No other non-customer accounts named.**
-12. Are qty 300–500 lines legitimate (catering, bulk)?
+12. ~~Are qty 300–500 lines legitimate (catering, bulk)?~~ **Not asked: none in 2023 (max quantity 27).**
 13. Churn: under "> 45 days = at risk", 77 % of 2023 customers are at risk at year end. Use three statuses instead: active ≤ 45 days, at_risk 46–90, lapsed > 90? *(Placeholder = yes)*
-14. Should CLV include spend before 2023, or only 2023 orders (the confirmed scope)? *(Placeholder = 2023 only)*
-15. Can we get location names (or town/address) for the 28 `restaurant_id` values? Dashboards would otherwise show ids like `63bc98a7…`.
+14. ~~Should CLV include spend before 2023?~~ **Not a question: user decision, CLV counts 2023 orders only (2023 is the scope).**
+15. Can we get location names (or town/address) for the 20 locations with 2023 orders? Dashboards would otherwise show ids like `63bc98a7…`.
 16. Are orders ever edited or deleted in SQL Server after placement, and can options be added to an order days later? *(Placeholder = no deletes; changes within the 3-day lookback)*
 - Q11 follow-ups: (a) are `5ece77fe…` orders real sales wrongly attributed (keep revenue) or orders that never happened (remove from sales)? *(Placeholder = real sales)*; (b) any other known non-customer accounts? *(Placeholder = none)*
 
