@@ -157,6 +157,13 @@ globalpartners/
 | 2026-10-09 | Churn status active ≤ 45 / at_risk 46–90 / lapsed > 90 days (SME Q13) | Single > 45-day rule flags 77 % (8,103) at year end; 49 % are one-time buyers |
 | 2026-10-09 | RFM fixed bands from config (R days 7/30/45/90; F orders 0/1/2/3–5/6+; M $0/15/30/60) and segments VIP / New / Churn Risk / Regular | Quintiles impossible: 82.5 % have 0–1 orders in 90 days; fixed bands are stable over time |
 | 2026-10-09 | Snapshot fully rebuilt each run, partitioned by month of `snapshot_date`; DQ tie-out against `fact_order` | Cheap at 2.3 M rows; late data corrects history |
+| 2026-10-09 | Gold facts approved: `fact_order_line` (line grain; `customer_id` = user_id or 'GUEST'; option revenue = Σ price × item qty, repeated copies counted each, config switch for Q9) and `fact_order` (order grain; 52,015 orders, $746,223.86 in 2023 scope) | Order-level fields never conflict within an order (0 of 131,328) |
+| 2026-10-09 | Facts updated by "affected orders" (order_ids with new/changed silver items or options this run) + MERGE; dimensions, aggregates and snapshot rebuilt each run | An added option changes line revenue, so the order is the unit; rebuild is cheap for small tables |
+| 2026-10-09 | `dim_item` key = SHA-256(item_name_key + item_category): 444 items; display name = most common spelling | 49 names appear in more than one category |
+| 2026-10-09 | `dim_date` generated 2020-01-01 → 2024-12-31 (1,827 days) with `iso_year`; `is_holiday` NULL outside 2023 | Holiday data only for 2023; unknown ≠ false |
+| 2026-10-09 | Two sales aggregates: `sales_daily` (date × location × hour, from fact_order, includes order counts) and `sales_daily_category` (date × location × category, from fact_order_line, no order counts); sums only, ratios computed after summing | 24.5 % of 2023 orders span categories: order counts are non-additive across categories |
+| 2026-10-09 | `dim_location.is_test_location` (1 location has only test orders); `location_name` empty pending SME Q15 | Source has ids only |
+| 2026-10-09 | Design doc states discount analysis is empty until SME Q7 | No negative option prices exist |
 
 ## Source file baseline (Step 1)
 
@@ -219,6 +226,7 @@ globalpartners/
 12. Are qty 300–500 lines legitimate (catering, bulk)?
 13. Churn: under "> 45 days = at risk", 77 % of 2023 customers are at risk at year end. Use three statuses instead: active ≤ 45 days, at_risk 46–90, lapsed > 90? *(Placeholder = yes)*
 14. Should CLV include spend before 2023, or only 2023 orders (the confirmed scope)? *(Placeholder = 2023 only)*
+15. Can we get location names (or town/address) for the 28 `restaurant_id` values? Dashboards would otherwise show ids like `63bc98a7…`.
 
 ## Change log
 
@@ -268,3 +276,5 @@ globalpartners/
   - Created `docs/03_architecture/Step3_Data_Model.md` with both approved silver specs; proposed `silver.date_dim` (found `week` is the ISO week: 1–2 Jan 2023 = week 52) and `silver.quarantine` (MERGE on source_table + record_hash, sightings counted, status open/resolved)
   - `silver.date_dim` and `silver.quarantine` approved: silver layer complete
   - `customer_daily_snapshot` approved after simulating 2023 on real data; added SME Q13 (churn statuses) and Q14 (CLV scope)
+  - Gold facts, dimensions and sales aggregates approved: data model fully specified; added SME Q15 (location names)
+  - Next: data-model (star schema) diagram in draw.io

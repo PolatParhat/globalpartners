@@ -12,7 +12,7 @@ section of the Step 3 solution design document.
 | Silver | `silver.date_dim` | Approved 2026-10-09 |
 | Silver | `silver.quarantine` | Approved 2026-10-09 |
 | Gold | `customer_daily_snapshot` | Approved 2026-10-09 |
-| Gold | facts, dimensions, sales aggregates | Proposed |
+| Gold | facts, dimensions, sales aggregates | Approved 2026-10-09 |
 
 ---
 
@@ -296,7 +296,103 @@ the three statuses separate customers who recently drifted away from long-gone o
 
 ---
 
-## 8. Known limitations
+## 8. Gold: facts
+
+### `fact_order_line`
+
+**Grain:** one row per item line. **Key:** `order_id + lineitem_id`. **Source:** `silver.order_items`
+left-joined to its options. 203,518 rows (all years); 79,965 in the 2023 reporting scope.
+
+| Column | Rule |
+|---|---|
+| `order_id`, `lineitem_id` | key |
+| `business_date`, `order_hour_local` | joins to `dim_date`; time of day |
+| `customer_id` | `user_id`, or `'GUEST'` when NULL |
+| `restaurant_id`, `app_name`, `item_key` | join to `dim_location`, `dim_app`, `dim_item` |
+| `is_loyalty` | from the order |
+| `item_quantity` | |
+| `item_revenue` | `item_price` (line total) |
+| `option_count` | options on the line |
+| `option_revenue` | Σ `option_price × item_quantity` (SME Q3 assumption). Repeated identical options counted each (config `repeated_options: count_each`, switch `count_once` for SME Q9) |
+| `discount_amount` | Σ negative option amounts ($0 today, see section 11) |
+| `line_revenue` | `item_revenue + option_revenue` |
+| `has_discount` | `discount_amount < 0` |
+| `is_test_data`, `is_guest`, `is_non_customer_account` | from silver |
+| `_run_id`, `_gold_updated_at` | audit |
+
+### `fact_order`
+
+**Grain:** one row per order. **Key:** `order_id`. **Source:** `fact_order_line` grouped by order.
+About 131,000 rows (all years); **52,015 orders and $746,223.86 in the 2023 reporting scope**.
+
+Columns: `order_id`, `business_date`, `order_ts_local`, `order_hour_local`, `customer_id`,
+`restaurant_id`, `app_name`, `is_loyalty`, `line_count`, `item_quantity`, `order_revenue`,
+`discount_amount`, `has_discount`, the three flags, audit columns.
+
+Order-level fields (customer, location, app, time, loyalty, card) are repeated on every line in
+the source and never conflict within an order (0 of 131,328 orders). A DQ check keeps verifying this.
+
+### How facts are updated
+
+Each run finds the **affected orders** (any `order_id` with a new or changed row in
+`silver.order_items` or `silver.order_item_options`), recomputes only those orders, and MERGEs
+them into both facts. The unit is the order because an added option changes its line's revenue.
+
+---
+
+## 9. Gold: dimensions (rebuilt each run)
+
+| Table | Key | Rows | Columns and notes |
+|---|---|---|---|
+| `dim_customer` | `customer_id` | 20,174 + 1 `GUEST` | `first_order_date`, `last_order_date`, `first_loyalty_order_date`, `is_non_customer_account`, `is_guest` (true only for `GUEST`) |
+| `dim_location` | `restaurant_id` | 28 (21 active in 2023) | `first_order_date`, `last_order_date`, `is_test_location` (1 location has only test orders), `location_name` (not in the source; SME Q15) |
+| `dim_item` | `item_key` = SHA-256(`item_name_key` + `item_category`) | 444 | `item_name` (most common spelling; ties alphabetical), `item_category` (42), `first_sold_date`, `last_sold_date`. An item is name + category: 49 names appear in more than one category |
+| `dim_app` | `app_name` | 3 | `is_test_app` (`Alltown Fresh - DEVELOPMENT`). `Alltown Neighborhood Perks` kept pending SME Q6 |
+| `dim_date` | `date` | 1,827 (2020-01-01 to 2024-12-31) | `year`, `quarter`, `month`, `month_name`, `iso_year`, `iso_week`, `day_of_week`, `day_of_week_num`, `is_weekend`, `is_holiday`, `holiday_name`, `is_in_scope`. Holiday data exists for 2023 only; elsewhere `is_holiday` is NULL (unknown), not false |
+
+---
+
+## 10. Gold: sales aggregates (rebuilt each run)
+
+24.5 % of 2023 orders (12,752 of 52,015) contain items from more than one category. Revenue
+adds up across categories, but order counts do not (such an order would be counted once per
+category). Order-level and category-level aggregates are therefore separate tables, and both
+store **sums only**; ratios such as average order value are calculated after summing.
+
+| Table | Grain | Source | Measures |
+|---|---|---|---|
+| `sales_daily` | `business_date` × `restaurant_id` × `order_hour_local` | `fact_order` | `orders`, `revenue`, `item_quantity`, `loyalty_orders`, `loyalty_revenue`, `guest_orders`, `discounted_orders` |
+| `sales_daily_category` | `business_date` × `restaurant_id` × `item_category` | `fact_order_line` | `revenue`, `item_quantity`, `line_count` (no order count) |
+
+**Scope:** 2023, excluding test data. Guest orders and the non-customer account are included (real sales).
+Weekly and monthly views join to `dim_date` (`iso_year` + `iso_week`, `month`).
+
+**Where each Step 5 metric comes from**
+
+| Metric | Table(s) |
+|---|---|
+| CLV, CLV tiers | `customer_daily_snapshot` |
+| RFM segments, churn indicators | `customer_daily_snapshot` |
+| Sales trends (daily/weekly/monthly; by location, category, time of day) | `sales_daily`, `sales_daily_category`, `dim_date` |
+| Loyalty vs non-members | `fact_order`, `customer_daily_snapshot` (`is_loyalty_as_of`) |
+| Top/bottom locations (revenue, average order value, orders per day/week) | `sales_daily`, `dim_location` |
+| Discount effectiveness | `fact_order` (`has_discount`, `discount_amount`), `sales_daily` (`discounted_orders`) |
+
+**DQ tie-out:** Σ `fact_order.order_revenue` = Σ `fact_order_line.line_revenue` = Σ `sales_daily.revenue`
+= Σ `sales_daily_category.revenue` (= $746,223.86 for 2023).
+
+---
+
+## 11. Discount analysis depends on SME Q7
+
+The requirements detect discounts as `option_price < 0`. **No such rows exist in the data**, so
+the discount analysis will show no discounted orders until the SME explains how discounts are
+recorded. The model already carries `discount_amount`, `has_discount` and `discounted_orders`, so
+an answer becomes a rule change, not a redesign.
+
+---
+
+## 12. Known limitations
 
 | Limitation | Effect | Production option |
 |---|---|---|
