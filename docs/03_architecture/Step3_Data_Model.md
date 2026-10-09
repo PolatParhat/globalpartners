@@ -11,7 +11,8 @@ section of the Step 3 solution design document.
 | Silver | `silver.order_item_options` | Approved 2026-10-09 |
 | Silver | `silver.date_dim` | Approved 2026-10-09 |
 | Silver | `silver.quarantine` | Approved 2026-10-09 |
-| Gold | facts, dimensions, `customer_daily_snapshot`, `sales_daily` | To be specified |
+| Gold | `customer_daily_snapshot` | Approved 2026-10-09 |
+| Gold | facts, dimensions, sales aggregates | Proposed |
 
 ---
 
@@ -213,10 +214,85 @@ The quarantine rate per run is checked by the DQ step.
 
 ---
 
-## 7. Gold layer
+## 7. Gold: `customer_daily_snapshot` (daily-evolving CLV)
 
-To be specified: `fact_order_line`, `fact_order`, `dim_customer`, `dim_location`, `dim_item`,
-`dim_app`, `dim_date`, `customer_daily_snapshot`, `sales_daily`.
+**Purpose:** the primary requirement, showing how each customer's lifetime value evolves day by day.
+**Grain:** one row per customer per day, from the customer's first in-scope order to the latest
+loaded business date (dense: days without orders included, because recency, churn status and
+tiers change on those days too). **Key:** `snapshot_date + customer_id`.
+
+**Population (from config):** orders in the reporting scope (2023), excluding test data, guest
+orders and non-customer accounts. **CLV counts in-scope (2023) orders only** (assumption, SME Q14).
+
+**Size for 2023:** 10,512 customers, 46,586 orders, $673,614.04 CLV at year end,
+**2,283,740 rows**. 49 % of customers ordered once.
+
+### Columns
+
+| Group | Column | Meaning |
+|---|---|---|
+| Key | `snapshot_date`, `customer_id` | |
+| That day | `orders_on_day`, `revenue_on_day` | |
+| To date | `first_order_date`, `last_order_date`, `orders_to_date`, **`revenue_to_date`** (= **CLV**), `avg_order_value_to_date`, `days_since_first_order`, `is_repeat_customer` (≥ 2 orders) | |
+| CLV tier | `clv_cume_dist` | share of customers that day with CLV ≤ this customer's |
+| | `clv_tier` | **High** if `clv_cume_dist` > 0.8, **Low** if ≤ 0.2, else **Medium**. Re-ranked every day; equal CLV always gets the same tier, so groups are close to (not exactly) 20/60/20. 31 Dec 2023: High 2,103 (≥ $75.93), Medium 6,604, Low 1,805 (≤ $10.98; 311 customers tie at $10.99) |
+| Behaviour | `days_since_last_order` | recency |
+| | `avg_days_between_orders` | between distinct order days; NULL with one order day (median 26 days) |
+| | `orders_last_90d`, `revenue_last_90d` | frequency and monetary window (N = 90 days, config) |
+| | `revenue_last_30d`, `revenue_prev_30d`, `spend_change_pct_30d` | spend trend: last 30 days vs the 30 before; NULL when the earlier period is $0 |
+| RFM | `r_score`, `f_score`, `m_score` | fixed bands from config (below) |
+| | `rfm_segment` | VIP / New / Churn Risk / Regular (below) |
+| Churn | `churn_status` | **active** ≤ 45 days since last order, **at_risk** 46–90, **lapsed** > 90 (SME Q13) |
+| Loyalty | `is_loyalty_as_of` | loyalty flag of the customer's latest order up to that day |
+| Audit | `_run_id`, `_computed_at` | |
+
+### RFM bands (config)
+
+Fixed bands instead of quintiles: 82.5 % of customers have 0 or 1 orders in any 90-day window,
+so equal-sized groups are impossible, and quintile cut-offs would shift every day.
+
+| Score | R: days since last order | F: orders in last 90 days | M: spend in last 90 days |
+|---|---|---|---|
+| 5 | ≤ 7 | 6+ | > $60 |
+| 4 | 8–30 | 3–5 | $30–60 |
+| 3 | 31–45 | 2 | $15–30 |
+| 2 | 46–90 | 1 | $0.01–15 |
+| 1 | > 90 | 0 | $0 |
+
+| Segment (checked in order) | Rule |
+|---|---|
+| VIP | R ≥ 4 and F ≥ 4 and M ≥ 4 |
+| New | R ≥ 4 and F ≤ 2 and first order within the last 90 days |
+| Churn Risk | R ≤ 2 and F ≤ 2 |
+| Regular | everything else |
+
+### Churn status at 31 Dec 2023
+
+| Status | Customers |
+|---|---|
+| active (≤ 45 days) | 2,409 |
+| at_risk (46–90) | 1,553 |
+| lapsed (> 90) | 6,550 |
+
+Under the single "> 45 days = at risk" rule, 8,103 customers (77 %) would be at risk;
+the three statuses separate customers who recently drifted away from long-gone one-time buyers.
+
+### Example: customer `642d6946…`
+
+| Date | CLV to date | Days since last order | Orders 90 d | Spend 90 d | R-F-M | Segment | Status |
+|---|---|---|---|---|---|---|---|
+| 2023-05-08 | $12.99 | 0 | 1 | $12.99 | 5-2-2 | New | active |
+| 2023-06-25 | $12.99 | 48 | 1 | $12.99 | 2-2-2 | Churn Risk | at_risk |
+| 2023-06-26 | $34.97 | 0 | 3 | $34.97 | 5-4-4 | VIP | active |
+| 2023-10-23 | $74.94 | 0 | 3 | $39.97 | 5-4-4 | VIP | active |
+| 2023-12-31 | $74.94 | 69 | 1 | $10.99 | 2-2-2 | Churn Risk | at_risk |
+
+### Build
+
+- **Full rebuild every run** (overwrite). 2.3 M rows takes seconds; late data corrects past days
+  automatically. Iceberg keeps earlier versions.
+- **Partitioned by month of `snapshot_date`** (12 partitions of about 190,000 rows).
+- **DQ tie-out:** Σ `revenue_on_day` = in-scope customer revenue in `fact_order` ($673,614.04 for 2023).
 
 ---
 

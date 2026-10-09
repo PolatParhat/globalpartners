@@ -151,6 +151,12 @@ globalpartners/
 | 2026-10-09 | Specs collected in `docs/03_architecture/Step3_Data_Model.md` (becomes the data-model section of the solution design doc) | Approved specs must live in an SME-facing document, not only in chat/CLAUDE.md |
 | 2026-10-09 | `silver.date_dim` approved: typed copy, full reload, `week` renamed `iso_week`; gold date dimension adds ISO year | Source week is ISO 8601: 1–2 Jan 2023 are week 52 of ISO year 2022; grouping by year + week would mix them with late December |
 | 2026-10-09 | `silver.quarantine` approved: one table for all sources, MERGE on `source_table + record_hash`, `times_seen`, first/last seen, `status` open/resolved | Lookback re-reads broken rows daily; append would duplicate them. Expected after first load: 29 rows |
+| 2026-10-09 | `customer_daily_snapshot` approved: customer × day, dense from first in-scope order, 2,283,740 rows for 2023 (10,512 customers, $673,614.04) | Primary goal: CLV evolving daily |
+| 2026-10-09 | CLV = in-scope (2023) spend to date only; pre-2023 spend excluded (config; SME Q14) | SME scope is 2023 |
+| 2026-10-09 | CLV tier by `cume_dist`, re-ranked daily, ties share a tier (≈ not exactly 20/60/20) | 311 customers tie at $10.99 at the Low cut-off |
+| 2026-10-09 | Churn status active ≤ 45 / at_risk 46–90 / lapsed > 90 days (SME Q13) | Single > 45-day rule flags 77 % (8,103) at year end; 49 % are one-time buyers |
+| 2026-10-09 | RFM fixed bands from config (R days 7/30/45/90; F orders 0/1/2/3–5/6+; M $0/15/30/60) and segments VIP / New / Churn Risk / Regular | Quintiles impossible: 82.5 % have 0–1 orders in 90 days; fixed bands are stable over time |
+| 2026-10-09 | Snapshot fully rebuilt each run, partitioned by month of `snapshot_date`; DQ tie-out against `fact_order` | Cheap at 2.3 M rows; late data corrects history |
 
 ## Source file baseline (Step 1)
 
@@ -211,6 +217,8 @@ globalpartners/
 10. Which time zone defines the business day (timestamps are UTC)?
 11. ~~Are the two user_ids with 2,400+ line items real customers?~~ **Answered 2026-10-05: `5ece77fe…` is faulty data, not a real customer; exclude from customer metrics, keep revenue in sales. No other non-customer accounts named.**
 12. Are qty 300–500 lines legitimate (catering, bulk)?
+13. Churn: under "> 45 days = at risk", 77 % of 2023 customers are at risk at year end. Use three statuses instead: active ≤ 45 days, at_risk 46–90, lapsed > 90? *(Placeholder = yes)*
+14. Should CLV include spend before 2023, or only 2023 orders (the confirmed scope)? *(Placeholder = 2023 only)*
 
 ## Change log
 
@@ -259,3 +267,4 @@ globalpartners/
   - `silver.order_item_options` spec approved; found options have no timestamp (extract through parent order) and no unique id (SHA-256 key with copy number)
   - Created `docs/03_architecture/Step3_Data_Model.md` with both approved silver specs; proposed `silver.date_dim` (found `week` is the ISO week: 1–2 Jan 2023 = week 52) and `silver.quarantine` (MERGE on source_table + record_hash, sightings counted, status open/resolved)
   - `silver.date_dim` and `silver.quarantine` approved: silver layer complete
+  - `customer_daily_snapshot` approved after simulating 2023 on real data; added SME Q13 (churn statuses) and Q14 (CLV scope)
