@@ -9,8 +9,8 @@ section of the Step 3 solution design document.
 |---|---|---|
 | Silver | `silver.order_items` | Approved 2026-10-09 |
 | Silver | `silver.order_item_options` | Approved 2026-10-09 |
-| Silver | `silver.date_dim` | Proposed |
-| Silver | `silver.quarantine` | Proposed |
+| Silver | `silver.date_dim` | Approved 2026-10-09 |
+| Silver | `silver.quarantine` | Approved 2026-10-09 |
 | Gold | facts, dimensions, `customer_daily_snapshot`, `sales_daily` | To be specified |
 
 ---
@@ -163,7 +163,7 @@ because the daily parent-based extract cannot see them.
 
 ---
 
-## 5. `silver.date_dim` (proposed)
+## 5. `silver.date_dim`
 
 **Grain:** one row per calendar date. **Key:** `date`. 365 rows (2023). Full reload each run (MERGE on `date`).
 
@@ -188,7 +188,7 @@ information from this table where available.
 
 ---
 
-## 6. `silver.quarantine` (proposed)
+## 6. `silver.quarantine`
 
 **Grain:** one row per distinct broken source row. Shared by all silver tables.
 

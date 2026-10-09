@@ -149,6 +149,8 @@ globalpartners/
 | 2026-10-09 | Option revenue computed in gold, not silver | Needs `item_quantity` from the parent line |
 | 2026-10-09 | Known limitations recorded: source deletes not detected (CDC out of scope); options added > 3 days after the order would be missed | Documented for the production-rollout section |
 | 2026-10-09 | Specs collected in `docs/03_architecture/Step3_Data_Model.md` (becomes the data-model section of the solution design doc) | Approved specs must live in an SME-facing document, not only in chat/CLAUDE.md |
+| 2026-10-09 | `silver.date_dim` approved: typed copy, full reload, `week` renamed `iso_week`; gold date dimension adds ISO year | Source week is ISO 8601: 1–2 Jan 2023 are week 52 of ISO year 2022; grouping by year + week would mix them with late December |
+| 2026-10-09 | `silver.quarantine` approved: one table for all sources, MERGE on `source_table + record_hash`, `times_seen`, first/last seen, `status` open/resolved | Lookback re-reads broken rows daily; append would duplicate them. Expected after first load: 29 rows |
 
 ## Source file baseline (Step 1)
 
@@ -256,3 +258,4 @@ globalpartners/
   - `silver.order_items` spec approved (rules measured on real data: 1 row quarantined; flags 2023/all: guest 6,395/17,808, test 700/826, non-customer 1,090/2,454)
   - `silver.order_item_options` spec approved; found options have no timestamp (extract through parent order) and no unique id (SHA-256 key with copy number)
   - Created `docs/03_architecture/Step3_Data_Model.md` with both approved silver specs; proposed `silver.date_dim` (found `week` is the ISO week: 1–2 Jan 2023 = week 52) and `silver.quarantine` (MERGE on source_table + record_hash, sightings counted, status open/resolved)
+  - `silver.date_dim` and `silver.quarantine` approved: silver layer complete
