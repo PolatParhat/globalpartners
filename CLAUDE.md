@@ -134,6 +134,14 @@ globalpartners/
 | 2026-10-07 | (I) Full 2023 replay runs locally; on AWS one full initial load + ~14-day replay | Full replay on AWS ≈ $104–131 and ~5 days; backfill skills learned locally for free |
 | 2026-10-07 | Stay on Glue 5.1 (not 6.0) | Glue 6.0 (Spark 4.1, Python 3.13, 30 % cheaper) has no local Docker image yet; newest is `aws-glue-libs:5.1.0`. Revisit when published |
 | 2026-10-07 | Free cost guardrails: AWS Budgets alert $20/mo, Cost Anomaly Detection, tags `project`/`env`/`stack` on every resource | Catch forgotten resources early |
+| 2026-10-09 | `silver.order_items` spec approved: 25 columns (keys, time, item, flags, audit); grain one row per `order_id + lineitem_id` | Same grain as source; cleaned, typed, flagged; nothing removed for business reasons |
+| 2026-10-09 | Timestamp parse format `yyyy-MM-dd'T'HH:mm:ss[.SSS]X`; Spark session time zone UTC; `business_date` and `order_hour_local` from `America/New_York` | Covers all 4 source formats (no fraction 187, 1 digit 1,853, 2 digits 18,131, 3 digits 183,348); session TZ makes local and AWS identical |
+| 2026-10-09 | Guests: `user_id` NULL in silver; `'GUEST'` only in gold | Silver stays faithful to source |
+| 2026-10-09 | `item_name` trimmed + spaces collapsed (427 rows) for display; `item_name_key` = lowercase for grouping (432 → 396 items); `item_category` URL fragment removed (98 rows) with `is_category_repaired` audit flag | Findings 27, 33, 34 |
+| 2026-10-09 | `printed_card_number` is sensitive: string, kept in silver only, never in gold or dashboard | Tokenized card number; gold only needs `is_loyalty` |
+| 2026-10-09 | Quarantine (broken rows): missing key/restaurant, bad timestamp, price not number or < 0, quantity not whole or < 1, `is_loyalty` not TRUE/FALSE, currency not USD. Today: 1 row (finding 8). `$0` items and bulk lines stay as normal rows | Quarantine = row unusable; flag = valid row a business rule may exclude |
+| 2026-10-09 | Silver dedup: keep newest `_ingested_at` per key; MERGE updates only when `_row_hash` (SHA-256 of business columns) changed; no partitioning on silver | Lookback re-reads rows; ~200k rows is too small to partition (small-files problem) |
+| 2026-10-09 | Money columns are `DECIMAL(10,2)`, never float | Sums must be exact to the cent |
 
 ## Source file baseline (Step 1)
 
@@ -237,3 +245,6 @@ globalpartners/
   - Optional cosmetics left: 3 labels crossed by lines, 3 ops arrows black instead of grey, catalog bar fill
   - Lesson: draw.io dark mode saves colours as `light-dark()` pairs that turn black in light-mode exports; draw in light mode
   - Next: Step 3.3 `silver.order_items` column spec
+- **2026-10-09**
+  - `silver.order_items` spec approved (rules measured on real data: 1 row quarantined; flags 2023/all: guest 6,395/17,808, test 700/826, non-customer 1,090/2,454)
+  - Next: `silver.order_item_options` spec
