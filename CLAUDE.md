@@ -21,8 +21,8 @@ Learning project built to production standard, following the SME plan in
 | Step | Description | Status |
 |---|---|---|
 | 1 | Download and verify source files | Done |
-| 2 | Initial data analysis | Analysis done; SME questions open |
-| 3 | Pipeline architecture + data model (SME approval) | In progress |
+| 2 | Initial data analysis | Done; remaining SME questions tracked below |
+| 3 | Pipeline architecture + data model (SME approval) | Design complete; awaiting SME approval |
 | 4 | Build pipeline on AWS | Not started |
 | 5 | Metrics (CLV, RFM, churn, trends, loyalty, locations, discounts) | Not started |
 | 6 | Streamlit dashboards | Not started |
@@ -35,6 +35,7 @@ globalpartners/
 ├── README.md                      # Entry point: overview + index of every step
 ├── CLAUDE.md                      # Running log of decisions and changes
 ├── requirements.txt
+├── config/                        # business_rules.yaml (SME-changeable rules)
 ├── .gitignore
 ├── docs/                          # Everything the SME reads, in step order
 │   ├── 00_requirements/
@@ -167,6 +168,9 @@ globalpartners/
 | 2026-10-09 | SME questions and their impact figures are 2023-only; questions with no 2023 rows are not asked (Q9, Q12); Q14 removed | User instruction: work only on 2023 orders |
 | 2026-10-10 | SME answers: Q1 `restaurant_id` is the location; Q2 `item_price` is the line total; Q4 guests excluded from customer metrics, kept in sales (placeholder confirmed); Q6 Perks app included; Q11b `5ece77fe…` is the only non-customer account | Placeholders become confirmed rules; no design change |
 | 2026-10-10 | Q15 dropped (no SME request for names); `location_name` kept in `dim_location` but empty; dashboards show `restaurant_id` when it is NULL | User decision: keep the column, use the ids the data has |
+| 2026-10-10 | `config/business_rules.yaml` written by the user and validated (11 sections: scope, test data, customers, revenue, CLV tiers, RFM bands + segments, churn, spend trend, extract lookback, DQ threshold); every rule cites its source (SME answer or assumption) | Step 3.4: SME answers become config edits, not code changes |
+| 2026-10-10 | `.claude/` added to `.gitignore` | Claude Code worktrees must not be committed |
+| 2026-10-10 | Step 3 package: `docs/03_architecture/Step3_Solution_Design.md` (requirements traceability, architecture, data flow, data model, business rules, security, operations, deployment, cost, limitations, open questions, approval table) + `README.md` index | Requirements doc deliverable: solution design document for SME sign-off |
 
 ## Source file baseline (Step 1)
 
@@ -289,3 +293,5 @@ globalpartners/
   - SME answers: Q1 yes, Q2 line total, Q4 yes, Q6 include, Q11b only one account; Q15 removed (use ids)
   - Kept `location_name` in `dim_location` (empty, ids shown); diagram unchanged
   - Outstanding SME questions: Q3, Q7, Q8, Q10, Q11a, Q13, Q16
+  - Data-model PNG committed (`9cb5800`); `config/business_rules.yaml` + `.gitignore` committed (`199710a`): Step 3.4 done
+  - Drafted `Step3_Solution_Design.md` and `README.md` for SME review (2023 figures only)
