@@ -3,8 +3,8 @@
 **Prepared by:** Polat
 **Date:** 2026-10-04
 **Step:** 2 of 7, Initial data analysis
-**Status:** Analysis complete; SME confirmation needed on open questions
-**Last updated:** 2026-10-04 (SME confirmed test data exclusion; 2023 population measured)
+**Status:** Analysis complete; remaining SME questions tracked in the Step 3 solution design (section 12)
+**Last updated:** 2026-10-10 (findings 34 and 35 added; SME answers to Q1, Q2, Q4, Q6, Q11 recorded)
 **Notebook:** `scripts/step2/data_analysis.ipynb`
 
 ---
@@ -28,6 +28,10 @@ Key results:
 - **Analysis scope is 2023 only** (SME confirmed), matching `date_dim` coverage.
   The in-scope population is 52,015 orders from 10,513 customers at 20 locations,
   $746,223.86 in revenue (section 6).
+- **Two more issues found during Step 3 design:** pasted admin URLs corrupt
+  `item_category` in 96 in-scope rows (always reversible), and 18.2 % of in-scope
+  customers switch loyalty status over time, so loyalty is not a fixed customer
+  attribute (findings 34, 35).
 - **Most outliers fall outside 2023.** Bulk lines, repeated options, $0 items and
   the Neighborhood Perks app barely occur in the in-scope data, so several SME
   questions have little effect on the metrics (section 6.2).
@@ -194,9 +198,11 @@ Orders per year (Eastern time): 2020: 8,186 · 2021: 26,790 · 2022: 37,490 ·
 | 25 | $0 menu items | 156 | 1 |
 | 27 | Item names with casing variants | 36 | 2 (122 names → 120) |
 | 29 | Orphan options | 28 | 0 (orders from Feb 2024) |
+| 34 | `item_category` corrupted by a pasted admin URL | 98 | 96 (70 `BBQ Plates`, 26 `Drip Coffee`) |
+| 35 | Customers with both loyalty and non-loyalty orders | | 1,913 of 10,512 customers (18.2 %); 1,808 joined later |
 
-Questions 6, 8, 9 and 12 have little or no effect on 2023 metrics. Question 11
-still matters: one account contributes 1,090 in-scope line items.
+Questions 9 and 12 have no 2023 rows and were not asked. Questions 4, 6 and 11 have
+since been answered (section 9).
 
 ## 7. Data quality findings
 
@@ -207,22 +213,22 @@ still matters: one account contributes 1,090 in-scope line items.
 | 7 | Blank `printed_card_number` in 157,435 rows | Exactly matches non-loyalty rows; valid, not missing |
 | 11 | Orders span 2020-04-21 → 2024-02-21; `date_dim` covers 2023 | SME confirmed 2023-only scope |
 | 12 | 826 rows from `Alltown Fresh - DEVELOPMENT` (741 orders, 115 users, $7,221.54) | SME confirmed test data; excluded from metrics, flagged in cleaned data |
-| 28 | `item_price` documented as unit price | Data shows line total (section 5.1) |
+| 28 | `item_price` documented as unit price | Data shows line total (section 5.1); SME confirmed (Q2) |
+| 6 | `user_id` blank in 17,808 rows (6,132 in scope) | SME confirmed (Q4): excluded from customer metrics, kept in sales and location totals |
+| 13 | `Alltown Neighborhood Perks` app | SME confirmed (Q6): included |
+| 17 | Two `user_id`s with 2,400+ line items | SME confirmed (Q11): `5ece77fe902ad501337b23fd` is a faulty account, the only one; excluded from customer metrics. The other account is a normal customer in 2023 |
+| 9, 24 | Repeated identical options; lines with quantity 300–500 | No rows in 2023; not asked. The pipeline keeps and flags them |
+| 8 / 26, 29 | Malformed row; orphan options | Quarantined by the pipeline (Step 3 design) |
+| 27, 33 | Inconsistent item-name casing and spacing | Normalised in the cleaned layer (Step 3 design) |
+| 34 | `item_category` corrupted by pasted admin URLs (96 rows in scope), e.g. `Drip Chttps://www.opendining.net/...#offee` | Removing the URL fragment always gives an existing category; repaired and flagged in the cleaned layer (notebook section 11) |
+| 35 | Loyalty status changes per customer: 1,913 of 10,512 in-scope customers (18.2 %) have both loyalty and non-loyalty orders; 1,808 started without loyalty; up to 9 switches | Loyalty is kept on every order and recorded as of each day in the data model (notebook section 11) |
 
 ### Open
 
 | # | Finding | Impact |
 |---|---|---|
-| 6 | `user_id` blank in 17,808 rows (8.75%) | Can't be attributed to a customer for CLV, RFM, or churn |
-| 8 / 26 | 1 malformed row: blank `lineitem_id`, `item_category`, `item_name`, quantity 0, price $4.39 (2021) | Quarantine |
-| 9 | Identical options repeated on one line item (594 option groups on quantity-1 lines; 305 repeated 5+ times) | Intentional extras vs. duplicate errors; affects option revenue |
-| 13 | `Alltown Neighborhood Perks` app, 1,270 rows | Purpose unknown |
-| 17 | Two `user_id`s with 2,400+ line items each, ordering at 19 locations | Likely non-customer accounts (store, kiosk, employee); would distort CLV |
-| 23 | No negative `option_price` values exist | Discount analysis has no data as documented |
-| 24 | Lines with quantities of 300–500 (e.g. $5,000 Korean Kimchi) | Not test data; possibly catering or bulk orders; large CLV effect |
-| 25 | 156 regular menu items priced $0 | Possibly how comps, rewards, or discounts are recorded |
-| 27 | Inconsistent `item_name` casing and spelling (36 names with casing variants) | Normalize before grouping by item |
-| 29 | 28 orphan options on 15 line items; their orders don't exist in `order_items` and the ids suggest late Feb 2024 | Likely extracted after the order items; quarantine |
+| 23 | No negative `option_price` values exist | Discount analysis has no data as documented (SME Q7) |
+| 25 | $0 menu item (1 line in scope) | Possibly a comp, reward or discount (SME Q8) |
 
 ## 8. Key columns
 
@@ -257,24 +263,31 @@ still matters: one account contributes 1,090 in-scope line items.
 
 ## 9. Questions for SME
 
-1. Is `restaurant_id` the `location_id` referenced in Step 5?
-2. The data shows `item_price` is the line total, contradicting the doc's "unit
-   price." Please confirm.
+Remaining questions, with 2023 figures, are tracked in
+[Step 3 solution design, section 12](../03_architecture/Step3_Solution_Design.md).
+
+1. ~~Is `restaurant_id` the `location_id` referenced in Step 5?~~ **Answered 2026-10-10: yes.**
+2. ~~The data shows `item_price` is the line total, contradicting the doc's "unit
+   price." Please confirm.~~ **Answered 2026-10-10: line total.**
 3. Is `option_price` charged × `item_quantity` (current assumption) or once per
-   line? Impact: $12,455.65 (0.67% of revenue).
-4. Should the 17,808 orders without a `user_id` be excluded from customer metrics
-   (CLV, RFM, churn) while still counting toward sales and location revenue?
+   line? 2023 impact: $2,739.90 (0.37 % of revenue).
+4. ~~Should orders without a `user_id` be excluded from customer metrics
+   (CLV, RFM, churn) while still counting toward sales and location revenue?~~
+   **Answered 2026-10-10: yes.**
 5. ~~Should `Alltown Fresh - DEVELOPMENT` orders (826 rows) be excluded as test data?~~
    **Answered 2026-10-04: yes, exclude from metrics.**
-6. What is the `Alltown Neighborhood Perks` app, and should it be included?
+6. ~~What is the `Alltown Neighborhood Perks` app, and should it be included?~~
+   **Answered 2026-10-10: include.**
 7. No negative `option_price` values exist. How are discounts represented?
-8. Are the 156 $0 menu items comps, rewards, or discounts?
-9. Are repeated identical options on one line item intentional extras or
-   duplicate errors?
+8. Is the $0 menu item (1 line in 2023) a comp, reward, or discount?
+9. ~~Are repeated identical options on one line item intentional extras or
+   duplicate errors?~~ **Not asked: no cases in 2023.**
 10. Timestamps are UTC with no location time zone. Which time zone defines the
     business day for daily metrics, `date_dim` joins, and the 2023 boundary?
-11. Are the two `user_id`s with 2,400+ line items real customers?
-12. Are lines with quantities of 300–500 legitimate orders (catering, bulk)?
+11. ~~Are the two `user_id`s with 2,400+ line items real customers?~~
+    **Answered: `5ece77fe…` is a faulty account, the only one; excluded from customer metrics.**
+12. ~~Are lines with quantities of 300–500 legitimate orders (catering, bulk)?~~
+    **Not asked: none in 2023 (max quantity 27).**
 
 ## 10. Decisions
 
@@ -288,8 +301,13 @@ still matters: one account contributes 1,090 in-scope line items.
 | Convert `"TRUE"`/`"FALSE"` strings to boolean | Required for correct filtering and aggregation |
 | Exclude `Alltown Fresh - DEVELOPMENT` rows from metrics; flag as `is_test_data` in cleaned data | SME confirmed test data (Q5) |
 | Business day in `America/New_York` (assumption) | Pending SME Q10; 1 row affected vs UTC |
+| Guests excluded from customer metrics, kept in sales | SME confirmed (Q4) |
+| `Alltown Neighborhood Perks` included | SME confirmed (Q6) |
+| Account `5ece77fe902ad501337b23fd` excluded from customer metrics | SME confirmed faulty account (Q11) |
+| Repair `item_category` by removing the URL fragment; flag repaired rows | Finding 34: always gives an existing category |
+| Loyalty recorded per order and per day, not per customer | Finding 35 |
 
 ## 11. Next steps
 
-- Send the remaining SME questions; Q11 (heavy accounts) and Q4 (guest orders) have the largest effect on 2023 customer metrics
-- Incorporate SME answers into the Step 3 data model and pipeline design
+- Step 3 design is with the SME for approval; remaining questions are in its section 12
+- SME answers so far are applied in `config/business_rules.yaml`

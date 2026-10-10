@@ -214,8 +214,8 @@ globalpartners/
 | 31 | order_items | 2023 population (America/New_York): 80,665 lines, 52,641 orders, 10,604 customers, 21 locations, $752,776.30 revenue. After excluding DEVELOPMENT: 79,965 lines, 52,015 orders, 10,513 customers, 20 locations, $746,223.86 | Info |
 | 32 | order_items | In scope (2023, excl. test): 4 Perks rows, 1 $0 item, 0 bulk lines (max qty 27), 0 repeated options on qty-1 lines, 2 name casing variants, 1,136 rows from top-2 user_ids (1,090 from one) | Info: Q6, Q8, Q9, Q12 have little 2023 impact; Q4, Q11 matter |
 | 33 | order_items | 36 item names have casing variants (432 → 396 after lowercasing) | Open: normalize |
-| 34 | order_items | `item_category` corrupted with pasted admin URLs in 98 rows (96 in scope), 3 values, e.g. `Drip Chttps://www.opendining.net/...#offee`; removing the URL fragment always yields an existing valid category | Open: fix in silver with regex (`https?://\S*?#` → ""); not yet in Step 2 notebook/report |
-| 35 | order_items | Loyalty status changes per customer: in scope, 1,914 of 10,513 customers (18%) have both loyalty and non-loyalty orders; 1,809 of them started non-loyalty (i.e. joined later); max 9 switches | Info: model loyalty as of each day, not as a fixed customer attribute; not yet in Step 2 notebook/report |
+| 34 | order_items | `item_category` corrupted with pasted admin URLs: 96 rows in scope (70 `BBQ Plates`, 26 `Drip Coffee`), e.g. `Drip Chttps://www.opendining.net/...#offee`; removing the URL fragment always yields an existing valid category | Resolved: repaired + flagged in silver; in Step 2 notebook (section 11) and report (2026-10-10) |
+| 35 | order_items | Loyalty status changes per customer: in scope (excl. guests and the non-customer account), 1,913 of 10,512 customers (18.2 %) have both loyalty and non-loyalty orders; 1,808 started non-loyalty (joined later); max 9 switches | Resolved: loyalty per order and per day in the data model; in Step 2 notebook (section 11) and report (2026-10-10) |
 
 ## Open questions for SME
 
@@ -295,3 +295,6 @@ globalpartners/
   - Outstanding SME questions: Q3, Q7, Q8, Q10, Q11a, Q13, Q16
   - Data-model PNG committed (`9cb5800`); `config/business_rules.yaml` + `.gitignore` committed (`199710a`): Step 3.4 done
   - Drafted `Step3_Solution_Design.md` and `README.md` for SME review (2023 figures only)
+  - Step 3 package sent to the SME with a walkthrough video (shared by link; `*.mov`/`*.mp4` ignored in Git after a 147 MB commit was undone before push)
+  - Step 2 notebook: added findings 34 and 35 (2023 scope) in section 11, summary updated; Restart & Run All, 56 cells, 0 errors
+  - Step 2 report: findings 34 and 35 added; SME answers Q1, Q2, Q4, Q6, Q11 recorded; open findings now only 23 (Q7) and 25 (Q8)
