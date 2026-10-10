@@ -1,0 +1,73 @@
+# GlobalPartners business rules.
+# A change here takes effect on the next pipeline run (gold is recomputed). No code change.
+# Every rule names its source: an SME answer, or an assumption awaiting one.
+version: 1
+
+reporting_scope:
+  start_date: 2023-01-01              # SME confirmed: 2023 only
+  end_date: 2023-12-31
+  business_timezone: America/New_York # assumption, SME Q10
+
+test_data:
+  excluded_apps:
+    - "Alltown Fresh - DEVELOPMENT"   # SME confirmed test data (Q5)
+  # "Alltown Neighborhood Perks" is included (SME confirmed Q6)
+
+customers:
+  non_customer_ids:
+    - "5ece77fe902ad501337b23fd"      # SME confirmed faulty account; the only one (Q11)
+  guests_in_customer_metrics: false   # SME confirmed (Q4)
+  guests_in_sales_metrics: true       # SME confirmed (Q4)
+  non_customers_in_sales_metrics: true  # assumption, SME Q11a
+
+revenue:
+  option_price_times_item_quantity: true  # assumption, SME Q3
+  repeated_options: count_each            # count_each | count_once
+
+clv_tiers:
+  high_if_cume_dist_above: 0.80       # top 20 %
+  low_if_cume_dist_at_or_below: 0.20  # bottom 20 %
+
+rfm:
+  window_days: 90
+  recency_score_if_days_at_most:      # more than 90 days → score 1
+    5: 7
+    4: 30
+    3: 45
+    2: 90
+  frequency_score_if_orders_at_least: # 0 orders → score 1
+    5: 6
+    4: 3
+    3: 2
+    2: 1
+  monetary_score_if_spend_at_least:   # $0 → score 1
+    5: 60.01
+    4: 30.00
+    3: 15.00
+    2: 0.01
+  segments:                           # checked top to bottom; first match wins
+    - name: VIP
+      min_r: 4
+      min_f: 4
+      min_m: 4
+    - name: New
+      min_r: 4
+      max_f: 2
+      max_days_since_first_order: 90
+    - name: Churn Risk
+      max_r: 2
+      max_f: 2
+    - name: Regular                   # everyone else
+
+churn:
+  active_if_days_at_most: 45          # requirements doc example
+  at_risk_if_days_at_most: 90         # more than 90 → lapsed (assumption, SME Q13)
+
+spend_trend:
+  window_days: 30                     # last 30 days vs the 30 before
+
+extract:
+  lookback_days: 3                    # assumption, SME Q16
+
+data_quality:
+  max_quarantine_rate: 0.01           # fail the run if more than 1 % of a batch is quarantined
