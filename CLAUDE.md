@@ -166,7 +166,7 @@ globalpartners/
 | 2026-10-09 | Design doc states discount analysis is empty until SME Q7 | No negative option prices exist |
 | 2026-10-09 | SME questions and their impact figures are 2023-only; questions with no 2023 rows are not asked (Q9, Q12); Q14 removed | User instruction: work only on 2023 orders |
 | 2026-10-10 | SME answers: Q1 `restaurant_id` is the location; Q2 `item_price` is the line total; Q4 guests excluded from customer metrics, kept in sales (placeholder confirmed); Q6 Perks app included; Q11b `5ece77fe…` is the only non-customer account | Placeholders become confirmed rules; no design change |
-| 2026-10-10 | Q15 dropped: locations shown by `restaurant_id`; `location_name` removed from `dim_location` | User decision |
+| 2026-10-10 | Q15 dropped (no SME request for names); `location_name` kept in `dim_location` but empty; dashboards show `restaurant_id` when it is NULL | User decision: keep the column, use the ids the data has |
 
 ## Source file baseline (Step 1)
 
@@ -287,4 +287,5 @@ globalpartners/
   - Corrected SME email to 2023-only figures (user instruction): dropped Q9, Q12, Q14
 - **2026-10-10**
   - SME answers: Q1 yes, Q2 line total, Q4 yes, Q6 include, Q11b only one account; Q15 removed (use ids)
+  - Kept `location_name` in `dim_location` (empty, ids shown); diagram unchanged
   - Outstanding SME questions: Q3, Q7, Q8, Q10, Q11a, Q13, Q16

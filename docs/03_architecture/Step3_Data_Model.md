@@ -347,7 +347,7 @@ them into both facts. The unit is the order because an added option changes its 
 | Table | Key | Rows | Columns and notes |
 |---|---|---|---|
 | `dim_customer` | `customer_id` | 20,174 + 1 `GUEST` | `first_order_date`, `last_order_date`, `first_loyalty_order_date`, `is_non_customer_account`, `is_guest` (true only for `GUEST`) |
-| `dim_location` | `restaurant_id` | 20 locations with real 2023 orders (+1 test-only location) | `first_order_date`, `last_order_date`, `is_test_location`. `restaurant_id` is the location (SME confirmed Q1); locations are shown by id, no names (decided) |
+| `dim_location` | `restaurant_id` | 20 locations with real 2023 orders (+1 test-only location) | `location_name`, `first_order_date`, `last_order_date`, `is_test_location`. `restaurant_id` is the location (SME confirmed Q1). `location_name` is kept but empty: the source has no names, so dashboards show `restaurant_id` until names are available |
 | `dim_item` | `item_key` = SHA-256(`item_name_key` + `item_category`) | 444 | `item_name` (most common spelling; ties alphabetical), `item_category` (42), `first_sold_date`, `last_sold_date`. An item is name + category: 49 names appear in more than one category |
 | `dim_app` | `app_name` | 3 | `is_test_app` (`Alltown Fresh - DEVELOPMENT`). `Alltown Neighborhood Perks` included (SME confirmed Q6) |
 | `dim_date` | `date` | 1,827 (2020-01-01 to 2024-12-31) | `year`, `quarter`, `month`, `month_name`, `iso_year`, `iso_week`, `day_of_week`, `day_of_week_num`, `is_weekend`, `is_holiday`, `holiday_name`, `is_in_scope`. Holiday data exists for 2023 only; elsewhere `is_holiday` is NULL (unknown), not false |
