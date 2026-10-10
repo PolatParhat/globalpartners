@@ -66,7 +66,7 @@ section of the Step 3 solution design document.
 | 13 | `item_category` | string | item_category | pasted admin URLs removed (regex `https?://\S*?#`): **98 rows repaired** to existing categories `Drip Coffee`, `BBQ Plates`, `Kid's` (finding 34) |
 | 14 | `item_name` | string | item_name | trimmed, repeated spaces collapsed (**427 rows** affected). Display name |
 | 15 | `item_name_key` | string | item_name | lowercase of #14, used for grouping: **432 spellings → 396 items** (findings 27, 33) |
-| 16 | `item_price` | decimal(10,2) | item_price | **line total, not unit price** (finding 28). Not a number or negative → quarantined |
+| 16 | `item_price` | decimal(10,2) | item_price | **line total, not unit price** (finding 28, SME confirmed Q2). Not a number or negative → quarantined |
 | 17 | `item_quantity` | int | item_quantity | whole number ≥ 1, otherwise quarantined |
 | 18 | `is_guest` | boolean | user_id | `user_id` is NULL |
 | 19 | `is_test_data` | boolean | app_name | app listed in config `excluded_apps` (`Alltown Fresh - DEVELOPMENT`) |
@@ -347,9 +347,9 @@ them into both facts. The unit is the order because an added option changes its 
 | Table | Key | Rows | Columns and notes |
 |---|---|---|---|
 | `dim_customer` | `customer_id` | 20,174 + 1 `GUEST` | `first_order_date`, `last_order_date`, `first_loyalty_order_date`, `is_non_customer_account`, `is_guest` (true only for `GUEST`) |
-| `dim_location` | `restaurant_id` | 28 (21 active in 2023) | `first_order_date`, `last_order_date`, `is_test_location` (1 location has only test orders), `location_name` (not in the source; SME Q15) |
+| `dim_location` | `restaurant_id` | 20 locations with real 2023 orders (+1 test-only location) | `first_order_date`, `last_order_date`, `is_test_location`. `restaurant_id` is the location (SME confirmed Q1); locations are shown by id, no names (decided) |
 | `dim_item` | `item_key` = SHA-256(`item_name_key` + `item_category`) | 444 | `item_name` (most common spelling; ties alphabetical), `item_category` (42), `first_sold_date`, `last_sold_date`. An item is name + category: 49 names appear in more than one category |
-| `dim_app` | `app_name` | 3 | `is_test_app` (`Alltown Fresh - DEVELOPMENT`). `Alltown Neighborhood Perks` kept pending SME Q6 |
+| `dim_app` | `app_name` | 3 | `is_test_app` (`Alltown Fresh - DEVELOPMENT`). `Alltown Neighborhood Perks` included (SME confirmed Q6) |
 | `dim_date` | `date` | 1,827 (2020-01-01 to 2024-12-31) | `year`, `quarter`, `month`, `month_name`, `iso_year`, `iso_week`, `day_of_week`, `day_of_week_num`, `is_weekend`, `is_holiday`, `holiday_name`, `is_in_scope`. Holiday data exists for 2023 only; elsewhere `is_holiday` is NULL (unknown), not false |
 
 ---

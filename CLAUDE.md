@@ -165,6 +165,8 @@ globalpartners/
 | 2026-10-09 | `dim_location.is_test_location` (1 location has only test orders); `location_name` empty pending SME Q15 | Source has ids only |
 | 2026-10-09 | Design doc states discount analysis is empty until SME Q7 | No negative option prices exist |
 | 2026-10-09 | SME questions and their impact figures are 2023-only; questions with no 2023 rows are not asked (Q9, Q12); Q14 removed | User instruction: work only on 2023 orders |
+| 2026-10-10 | SME answers: Q1 `restaurant_id` is the location; Q2 `item_price` is the line total; Q4 guests excluded from customer metrics, kept in sales (placeholder confirmed); Q6 Perks app included; Q11b `5ece77fe…` is the only non-customer account | Placeholders become confirmed rules; no design change |
+| 2026-10-10 | Q15 dropped: locations shown by `restaurant_id`; `location_name` removed from `dim_location` | User decision |
 
 ## Source file baseline (Step 1)
 
@@ -182,14 +184,14 @@ globalpartners/
 | 2 | order_items | `creation_time_utc`: 187 values lack milliseconds (valid ISO 8601) | Resolved: format="ISO8601" |
 | 3 | date_dim | `date_key` is DD-MM-YYYY; pandas guessed MM-DD | Resolved: format="%d-%m-%Y" |
 | 4 | order_items | `order_id + lineitem_id` unique | Confirmed: join key |
-| 6 | order_items | `user_id` blank in 17,808 rows (8.7%) | Open: CLV handling (SME Q4) |
+| 6 | order_items | `user_id` blank in 17,808 rows (8.7%) | Resolved: SME Q4, guests excluded from customer metrics, kept in sales |
 | 7 | order_items | Blank `printed_card_number` ⇔ `is_loyalty` FALSE, zero exceptions | Resolved: blanks valid |
 | 8 | order_items | 1 malformed row: blank lineitem_id/category/name, quantity 0, price $4.39 (2021) | Open: quarantine |
 | 9 | options | Identical options repeated on one line (594 groups on qty-1 lines) | Open: SME Q9 |
 | 10 | date_dim | `holiday_name` blank in 353 rows (12 holidays) | Expected |
 | 11 | order_items | Orders span 2020-04-21 → 2024-02-21; date_dim covers 2023 | Resolved: 2023-only scope |
 | 12 | order_items | 826 rows from `Alltown Fresh - DEVELOPMENT` (741 orders, 115 users, $7,221.54 item revenue) | Resolved: SME confirmed test data; exclude from metrics |
-| 13 | order_items | `Alltown Neighborhood Perks` app, 1,270 rows | Open: SME Q6 |
+| 13 | order_items | `Alltown Neighborhood Perks` app, 1,270 rows | Resolved: SME Q6, include |
 | 14 | order_items | 131,328 orders, avg 1.55 items; max 61 | Info |
 | 16 | order_items | 20,174 identified customers | Info |
 | 17 | order_items | Two user_ids with 2,400+ line items | Resolved: SME confirmed `5ece77fe…` is faulty data (non-customer), excluded from customer metrics; `5f1b00e5…` is a normal customer in 2023 (42 orders, $466) |
@@ -202,7 +204,7 @@ globalpartners/
 | 24 | order_items | Qty 300–500 lines (e.g. $5,000 Korean Kimchi), not test data | Open: SME Q12 |
 | 25 | order_items | 156 regular menu items at $0 | Open: SME Q8 |
 | 27 | order_items | Inconsistent item_name casing/spelling | Open: normalize |
-| 28 | order_items | `item_price` is line total, not unit price | Resolved: revenue = item_price |
+| 28 | order_items | `item_price` is line total, not unit price | Resolved: SME confirmed (Q2); revenue = item_price |
 | 29 | options | 28 orphan options (15 line keys); their order_ids are absent from order_items entirely, ids suggest late Feb 2024 (extract cutoff) | Open: quarantine |
 | 30 | options | Options recorded once per line; `option_price` is a unit price | Info |
 | 31 | order_items | 2023 population (America/New_York): 80,665 lines, 52,641 orders, 10,604 customers, 21 locations, $752,776.30 revenue. After excluding DEVELOPMENT: 79,965 lines, 52,015 orders, 10,513 customers, 20 locations, $746,223.86 | Info |
@@ -213,12 +215,12 @@ globalpartners/
 
 ## Open questions for SME
 
-1. Is `restaurant_id` the `location_id` referenced in Step 5?
-2. Data shows `item_price` is the line total, contradicting the doc. Please confirm. (2023: 5,127 multi-quantity lines, none priced as a unit price.)
+1. ~~Is `restaurant_id` the `location_id` referenced in Step 5?~~ **Answered 2026-10-10: yes.**
+2. ~~Data shows `item_price` is the line total, contradicting the doc. Please confirm.~~ **Answered 2026-10-10: line total.**
 3. Is `option_price` charged × `item_quantity` (assumption) or once per line? 2023 impact: $2,739.90 (0.37 %).
-4. Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue? *(Draft sent 2026-10-04; placeholder = yes)*
+4. ~~Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue?~~ **Answered 2026-10-10: yes.**
 5. ~~Exclude `Alltown Fresh - DEVELOPMENT` orders (826 rows) as test data?~~ **Answered 2026-10-04: yes, exclude.**
-6. What is the `Alltown Neighborhood Perks` app; include it? (2023: 4 lines, 3 orders.)
+6. ~~What is the `Alltown Neighborhood Perks` app; include it?~~ **Answered 2026-10-10: include.**
 7. No negative `option_price` values exist. How are discounts represented?
 8. Is the $0 menu item a comp, reward, or discount? (2023: 1 line.)
 9. ~~Are repeated identical options on one line item extras or duplicate errors?~~ **Not asked: 0 cases in 2023.**
@@ -227,9 +229,9 @@ globalpartners/
 12. ~~Are qty 300–500 lines legitimate (catering, bulk)?~~ **Not asked: none in 2023 (max quantity 27).**
 13. Churn: under "> 45 days = at risk", 77 % of 2023 customers are at risk at year end. Use three statuses instead: active ≤ 45 days, at_risk 46–90, lapsed > 90? *(Placeholder = yes)*
 14. ~~Should CLV include spend before 2023?~~ **Not a question: user decision, CLV counts 2023 orders only (2023 is the scope).**
-15. Can we get location names (or town/address) for the 20 locations with 2023 orders? Dashboards would otherwise show ids like `63bc98a7…`.
+15. ~~Location names?~~ **Removed 2026-10-10: use the location ids as they are.**
 16. Are orders ever edited or deleted in SQL Server after placement, and can options be added to an order days later? *(Placeholder = no deletes; changes within the 3-day lookback)*
-- Q11 follow-ups: (a) are `5ece77fe…` orders real sales wrongly attributed (keep revenue) or orders that never happened (remove from sales)? *(Placeholder = real sales)*; (b) any other known non-customer accounts? *(Placeholder = none)*
+- Q11 follow-ups: (a) are `5ece77fe…` orders real sales wrongly attributed (keep revenue) or orders that never happened (remove from sales)? *(Placeholder = real sales)*; ~~(b) any other known non-customer accounts?~~ **Answered 2026-10-10: just the one.**
 
 ## Change log
 
@@ -282,3 +284,7 @@ globalpartners/
   - Gold facts, dimensions and sales aggregates approved: data model fully specified; added SME Q15 (location names)
   - Data-model diagram generated by Claude at the user's request: `docs/03_architecture/global-partner-data-model.drawio` (10 tables, 10 one-to-many relationships, 3 built-from arrows; layout checked with a rendered preview). PNG export pending (draw.io desktop not installed)
   - Compiled all open SME questions into one email (16 incl. new Q16 source edits/deletes and Q11 follow-ups a/b), grouped by 2023 impact
+  - Corrected SME email to 2023-only figures (user instruction): dropped Q9, Q12, Q14
+- **2026-10-10**
+  - SME answers: Q1 yes, Q2 line total, Q4 yes, Q6 include, Q11b only one account; Q15 removed (use ids)
+  - Outstanding SME questions: Q3, Q7, Q8, Q10, Q11a, Q13, Q16
