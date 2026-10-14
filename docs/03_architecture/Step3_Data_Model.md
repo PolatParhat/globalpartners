@@ -34,7 +34,7 @@ section of the Step 3 solution design document.
 | Text | trimmed; empty strings become NULL; repeated spaces collapsed where noted |
 | Money | `DECIMAL(10,2)`, never floating point, so sums are exact to the cent |
 | Booleans | source `"TRUE"`/`"FALSE"` become real booleans; any other value is invalid |
-| Dates and times | parsed with an explicit format, never guessed. Spark session time zone = UTC. Business day = `America/New_York` (assumption pending SME Q10) |
+| Dates and times | parsed with an explicit format, never guessed. Spark session time zone = UTC. Business day = `America/New_York` (assumption, not confirmed by the SME, Q10) |
 | Keys | natural keys from the source; a SHA-256 key where the source has none |
 | Quarantine vs flag | **Quarantine:** the row is broken and cannot be used (it moves to `silver.quarantine` with a reason). **Flag:** the row is valid but a business rule may exclude it (it stays, with a boolean column). Exclusions happen in gold, driven by `config/business_rules.yaml` |
 | Duplicates from the 3-day lookback | one row per key is kept (newest `_ingested_at`), then MERGE: new keys inserted, changed rows (different `_row_hash`) updated, unchanged rows skipped |
@@ -146,7 +146,7 @@ its options always arrive in the same batch.
 | 11 | `is_repeated_option` | boolean | row belongs to a group of identical copies (0 in 2023) |
 | 12–15 | `_batch_id`, `_ingested_at`, `_row_hash`, `_silver_updated_at` | | audit |
 
-Option revenue (`option_price × item_quantity`, SME Q3 assumption) needs the item quantity,
+Option revenue (`option_price × item_quantity`, assumption, not confirmed by the SME, Q3) needs the item quantity,
 so it is calculated in gold where lines and options are joined.
 
 ### Quarantine rules
@@ -244,7 +244,7 @@ orders and non-customer accounts. **CLV counts 2023 orders only** (the confirmed
 | | `revenue_last_30d`, `revenue_prev_30d`, `spend_change_pct_30d` | spend trend: last 30 days vs the 30 before; NULL when the earlier period is $0 |
 | RFM | `r_score`, `f_score`, `m_score` | fixed bands from config (below) |
 | | `rfm_segment` | VIP / New / Churn Risk / Regular (below) |
-| Churn | `churn_status` | **active** ≤ 45 days since last order, **at_risk** 46–90, **lapsed** > 90 (SME Q13) |
+| Churn | `churn_status` | **active** ≤ 45 days since last order, **at_risk** 46–90, **lapsed** > 90 (SME confirmed) |
 | Loyalty | `is_loyalty_as_of` | loyalty flag of the customer's latest order up to that day |
 | Audit | `_run_id`, `_computed_at` | |
 
@@ -315,7 +315,7 @@ left-joined to its options. 203,518 rows (all years); 79,965 in the 2023 reporti
 | `item_quantity` | |
 | `item_revenue` | `item_price` (line total) |
 | `option_count` | options on the line |
-| `option_revenue` | Σ `option_price × item_quantity` (SME Q3 assumption). Repeated identical options counted each (config `repeated_options: count_each`; none in 2023) |
+| `option_revenue` | Σ `option_price × item_quantity` (assumption, not confirmed by the SME, Q3). Repeated identical options counted each (config `repeated_options: count_each`; none in 2023) |
 | `discount_amount` | Σ negative option amounts ($0 today, see section 11) |
 | `line_revenue` | `item_revenue + option_revenue` |
 | `has_discount` | `discount_amount < 0` |
@@ -385,12 +385,13 @@ Weekly and monthly views join to `dim_date` (`iso_year` + `iso_week`, `month`).
 
 ---
 
-## 11. Discount analysis depends on SME Q7
+## 11. Data limitation: no discount data
 
-The requirements detect discounts as `option_price < 0`. **No such rows exist in the data**, so
-the discount analysis will show no discounted orders until the SME explains how discounts are
-recorded. The model already carries `discount_amount`, `has_discount` and `discounted_orders`, so
-an answer becomes a rule change, not a redesign.
+The requirements detect discounts as `option_price < 0`. **No such rows exist in the data**, and the
+source has no other discount field. The SME confirmed (2026-10-14) that this is a data limitation:
+discount-effectiveness analysis shows no discounted orders. The model still carries
+`discount_amount`, `has_discount` and `discounted_orders`, so discount data that becomes available
+later needs only a detection-rule change.
 
 ---
 

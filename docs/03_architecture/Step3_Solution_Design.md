@@ -1,11 +1,11 @@
 # Step 3: Solution Design
 
-GlobalPartners Business Insights Pipeline. Version 1.0 for SME approval, 2026-10-10.
+GlobalPartners Business Insights Pipeline. Version 1.1, **approved by the SME on 2026-10-14** (section 13).
 Prepared by Polat.
 
-**What you are asked to approve:** the pipeline architecture (section 3), the data model
-(section 5) and the way the business rules are applied (section 6). Open questions with working
-assumptions are listed in section 12; answering them does not change the design.
+**Approved scope:** the pipeline architecture (section 3), the data model (section 5) and the way
+the business rules are applied (section 6). Assumptions the SME has not confirmed are listed in
+section 12; data limitations in section 11.
 
 | Document | Content |
 |---|---|
@@ -29,7 +29,7 @@ impact, location performance, discount effectiveness) available to a Streamlit d
 | Scope item | Value |
 |---|---|
 | Reporting period | **2023 orders** (SME confirmed) |
-| Business day | Order time converted from UTC to `America/New_York` (assumption, Q10) |
+| Business day | Order time converted from UTC to `America/New_York` (assumption, not confirmed by the SME, Q10) |
 | Test data | `Alltown Fresh - DEVELOPMENT` orders excluded from all metrics (SME confirmed) |
 | 2023 in scope | **52,015 orders, $746,223.86 revenue, 20 locations** |
 | Customers in customer metrics | **10,512** (guest orders and the non-customer account excluded) |
@@ -135,7 +135,7 @@ Full column specifications: [`Step3_Data_Model.md`](Step3_Data_Model.md).
 | `dim_customer`, `dim_location`, `dim_item`, `dim_app`, `dim_date` | customer, location, item, app, calendar day | Describing and filtering the facts |
 
 Revenue per line = `item_price` (the line total, SME confirmed) + Σ (`option_price` × `item_quantity`)
-(assumption, Q3).
+(assumption, not confirmed by the SME, Q3).
 
 ### 5.2 Daily CLV: `customer_daily_snapshot`
 
@@ -150,7 +150,7 @@ For 2023: **2,283,740 rows, 10,512 customers, $673,614.04 total CLV at year end.
 | Recency, frequency, monetary | Days since last order; orders and spend in the last 90 days |
 | RFM segment | **VIP**, **New**, **Churn Risk** or **Regular** (rules in section 6) |
 | Churn indicators | Days since last order, average days between orders, spend in the last 30 days vs the previous 30 |
-| Churn status | **active** ≤ 45 days since last order, **at risk** 46–90, **lapsed** > 90 (assumption, Q13) |
+| Churn status | **active** ≤ 45 days since last order, **at risk** 46–90, **lapsed** > 90 (SME confirmed) |
 | Loyalty | Loyalty status as of that day (taken from the customer's latest order) |
 
 Example, a real 2023 customer:
@@ -184,8 +184,8 @@ can be split by category, but an order cannot be counted once per category.
 | Churn indicators and at-risk customers | `customer_daily_snapshot` |
 | Sales trends (daily, weekly, monthly; by location, category, time of day) | `sales_daily`, `sales_daily_category`, `dim_date` |
 | Loyalty members vs non-members | `fact_order`, `customer_daily_snapshot` |
-| Best and worst locations (revenue, average order value, orders per day/week) | `sales_daily`, `dim_location` |
-| Discount effectiveness | `fact_order`, `sales_daily` (see section 11) |
+| Best and worst locations (revenue, average order value, orders per day/week) | `sales_daily`, `dim_location`, by `restaurant_id` (no location names: section 11) |
+| Discount effectiveness | `fact_order`, `sales_daily`; no discount data in the source (data limitation, section 11) |
 
 ---
 
@@ -203,14 +203,14 @@ records whether it is an SME decision or an assumption.
 | Location | `restaurant_id` is the location | SME confirmed (Q1) |
 | Line revenue | `item_price` is the line total | SME confirmed (Q2) |
 | Guest orders (4,492 orders, $60,247) | excluded from customer metrics, included in sales and location totals | SME confirmed (Q4) |
-| Account `5ece77fe902ad501337b23fd` (937 orders, $12,362) | excluded from customer metrics; revenue kept in sales | SME confirmed faulty account, the only one (Q11); revenue treatment assumed (Q11a) |
-| Option revenue | `option_price` × `item_quantity` | assumption (Q3) |
-| Business day | `America/New_York` | assumption (Q10) |
+| Account `5ece77fe902ad501337b23fd` (937 orders, $12,362) | excluded from customer metrics; revenue kept in sales | SME confirmed faulty account, the only one (Q11); revenue treatment is an assumption, not confirmed by the SME (Q11a) |
+| Option revenue | `option_price` × `item_quantity` | **assumption, not confirmed by the SME** (Q3) |
+| Business day | `America/New_York` | **assumption, not confirmed by the SME** (Q10) |
 | CLV tiers | High top 20 %, Low bottom 20 % | requirements document |
 | RFM window | 90 days | design |
 | RFM scores (5 = best) | Recency: ≤ 7 / 30 / 45 / 90 days. Frequency: ≥ 6 / 3 / 2 / 1 orders. Monetary: > $60 / ≥ $30 / ≥ $15 / > $0 | design |
 | RFM segments (first match wins) | VIP: R, F, M all ≥ 4. New: R ≥ 4, F ≤ 2, first order within 90 days. Churn Risk: R ≤ 2, F ≤ 2. Regular: everyone else | requirements document wording |
-| Churn status | active ≤ 45 days, at risk 46–90, lapsed > 90 | assumption (Q13) |
+| Churn status | active ≤ 45 days, at risk 46–90, lapsed > 90 | SME confirmed |
 
 Fixed RFM score bands are used instead of equal-sized groups because 82.5 % of customers have 0 or
 1 orders in any 90-day window, so equal groups are impossible, and fixed bands mean a score has the
@@ -289,28 +289,30 @@ Prices are AWS list prices for us-east-1. Details and the alternatives considere
 
 | Limitation | Effect | Option for a production rollout |
 |---|---|---|
-| Discounts | The requirements identify discounts as negative option prices; no 2023 order has one, so discount analysis shows no discounted orders until Q7 is answered | Apply the rule the SME provides (configuration and transformation rule, no redesign) |
-| Deleted orders | Orders deleted in SQL Server are not detected by the incremental load | SQL Server change data capture (Q16) |
-| Late-added options | Options added more than three days after an order would be missed | Widen the safety window or add a timestamp at the source (Q16) |
-| Location names | The source has location ids only; dashboards show ids | Add names to `dim_location` if they become available |
+| **No discount data** (data limitation, SME confirmed) | The requirements identify discounts as negative option prices; no 2023 order has one, and the source has no other discount field. Discount-effectiveness analysis therefore shows no discounted orders | If discount data becomes available, the model already has `discount_amount`, `has_discount` and `discounted_orders`; only the detection rule changes |
+| **No location names** (data limitation, SME confirmed) | The source has location ids only. Location analysis uses `restaurant_id`, and dashboards show ids | Fill `dim_location.location_name` if names become available |
+| Deleted orders | Orders deleted in SQL Server are not detected by the incremental load | SQL Server change data capture |
+| Late-added options | Options added more than three days after an order would be missed | Widen the safety window or add a timestamp at the source |
 | High availability | Single-AZ database, no formal service levels | Multi-AZ RDS, defined SLAs and on-call for a production rollout |
 
 ---
 
-## 12. Open questions
+## 12. Assumptions not confirmed by the SME
 
-Each question has a working assumption already built into the design. An answer changes a setting
-in `config/business_rules.yaml` or a single transformation rule; none changes the architecture.
+The SME approved proceeding with these working assumptions. Each is a setting in
+`config/business_rules.yaml` (or a single transformation rule), so a later answer changes a setting,
+not the design.
 
-| # | Question | Working assumption |
-|---|---|---|
-| Q13 | Churn: under "> 45 days = at risk", 77 % of 2023 customers (8,103 of 10,512) are at risk at year end. Use three statuses: active ≤ 45 days (2,409), at risk 46–90 (1,553), lapsed > 90 (6,550)? | yes |
-| Q7 | How are discounts or promotions recorded? No 2023 order has a negative option price | none; analysis stays empty |
-| Q11a | Are the 937 orders ($12,362) of account `5ece77fe…` real sales wrongly attached to one account, or orders that never happened? | real sales; revenue kept |
-| Q3 | Is `option_price` charged per unit (× quantity) or once per line? 2023 difference: $2,739.90 (0.37 %) | per unit |
-| Q10 | Which time zone defines the business day? | America/New_York |
-| Q16 | Are orders ever edited or deleted after they are placed, and can options be added days later? | no deletes; changes within 3 days |
-| Q8 | One menu item was sold at $0 in 2023: comp, reward or discount? | a normal sale at $0 |
+| # | Question | Assumption used | 2023 impact if wrong |
+|---|---|---|---|
+| Q3 | Is `option_price` charged per unit (× quantity) or once per line? | **Per unit** (`option_price × item_quantity`) | Revenue $2,739.90 (0.37 %) lower |
+| Q10 | Which time zone defines the business day? | **America/New_York** | 1 line item moves to a different year |
+| Q11a | Are the 937 orders ($12,362) of account `5ece77fe…` real sales attached to one account, or orders that never happened? | **Real sales**: kept in sales and location totals, excluded from customer metrics | Sales and location totals $12,362 lower |
+| Q16 | Are orders ever edited or deleted after they are placed, and can options be added days later? | **No deletes; changes within 3 days** | See section 11 (deleted orders, late-added options) |
+| Q8 | One menu item was sold at $0 in 2023: comp, reward or discount? | **A normal sale at $0** | 1 line |
+
+Confirmed by the SME on 2026-10-14: churn statuses (active ≤ 45 days, at risk 46–90, lapsed > 90);
+discounts and location names are data limitations; `restaurant_id` is used for location analysis.
 
 ---
 
@@ -318,6 +320,6 @@ in `config/business_rules.yaml` or a single transformation rule; none changes th
 
 | Name | Role | Decision | Date | Comments |
 |---|---|---|---|---|
-| | Subject Matter Expert | ☐ Approved ☐ Approved with changes ☐ Not approved | | |
+| SME | Subject Matter Expert | ☑ **Approved** | 2026-10-14 | "Looks nice. Your churn categories are fine. For missing discount data and location names, mention these as data limitations. Use restaurant_id for location analysis. For pricing, timezone proceed with your assumptions but clearly document them since they are not confirmed." |
 
-Step 4 (building the pipeline on AWS) starts after written approval.
+Step 4 (building the pipeline) starts after this approval.

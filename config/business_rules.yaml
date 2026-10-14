@@ -6,7 +6,7 @@ version: 1
 reporting_scope:
   start_date: 2023-01-01              # SME confirmed: 2023 only
   end_date: 2023-12-31
-  business_timezone: America/New_York # assumption, SME Q10
+  business_timezone: America/New_York # assumption, NOT confirmed by the SME (Q10); SME approved proceeding
 
 test_data:
   excluded_apps:
@@ -18,10 +18,10 @@ customers:
     - "5ece77fe902ad501337b23fd"      # SME confirmed faulty account; the only one (Q11)
   guests_in_customer_metrics: false   # SME confirmed (Q4)
   guests_in_sales_metrics: true       # SME confirmed (Q4)
-  non_customers_in_sales_metrics: true  # assumption, SME Q11a
+  non_customers_in_sales_metrics: true  # assumption, NOT confirmed by the SME (Q11a)
 
 revenue:
-  option_price_times_item_quantity: true  # assumption, SME Q3
+  option_price_times_item_quantity: true  # assumption, NOT confirmed by the SME (Q3); SME approved proceeding
   repeated_options: count_each            # count_each | count_once
 
 clv_tiers:
@@ -61,13 +61,13 @@ rfm:
 
 churn:
   active_if_days_at_most: 45          # requirements doc example
-  at_risk_if_days_at_most: 90         # more than 90 → lapsed (assumption, SME Q13)
+  at_risk_if_days_at_most: 90         # more than 90 → lapsed (SME confirmed, 2026-10-14)
 
 spend_trend:
   window_days: 30                     # last 30 days vs the 30 before
 
 extract:
-  lookback_days: 3                    # assumption, SME Q16
+  lookback_days: 3                    # assumption, NOT confirmed by the SME (Q16)
 
 data_quality:
   max_quarantine_rate: 0.01           # fail the run if more than 1 % of a batch is quarantined

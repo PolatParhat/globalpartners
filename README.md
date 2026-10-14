@@ -17,8 +17,8 @@ metric. Built step by step for SME review, to production standard.
 |---|---|---|---|
 | 1 | Download and verify source files | Done | [Data verification findings](docs/01_data_verification/Step1_Data_Verification_Findings.md) · [integrity report](docs/01_data_verification/integrity_report.json) |
 | 2 | Initial data analysis | Done | [Initial data analysis](docs/02_data_analysis/Step2_Initial_Data_Analysis.md) · [notebook](scripts/step2/data_analysis.ipynb) |
-| 3 | Pipeline architecture and data model | **Awaiting SME approval** | [Solution design](docs/03_architecture/Step3_Solution_Design.md) · [data model](docs/03_architecture/Step3_Data_Model.md) · [architecture diagram](docs/03_architecture/global-partner-pipeline-architecture.png) · [data-model diagram](docs/03_architecture/global-partner-data-model.png) · [cost estimate](docs/03_architecture/cost_estimate.md) · [business rules](config/business_rules.yaml) |
-| 4 | Build the pipeline on AWS | Not started | |
+| 3 | Pipeline architecture and data model | **Approved by the SME (2026-10-14)** | [Solution design](docs/03_architecture/Step3_Solution_Design.md) · [data model](docs/03_architecture/Step3_Data_Model.md) · [architecture diagram](docs/03_architecture/global-partner-pipeline-architecture.png) · [data-model diagram](docs/03_architecture/global-partner-data-model.png) · [cost estimate](docs/03_architecture/cost_estimate.md) · [business rules](config/business_rules.yaml) |
+| 4 | Build the pipeline (local first, then AWS) | **In progress** | |
 | 5 | Metrics: CLV, RFM, churn, sales trends, loyalty, locations, discounts | Not started | |
 | 6 | Streamlit dashboards | Not started | |
 | 7 | Submission, CI/CD, video | Not started | |

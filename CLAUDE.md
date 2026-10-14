@@ -22,8 +22,8 @@ Learning project built to production standard, following the SME plan in
 |---|---|---|
 | 1 | Download and verify source files | Done |
 | 2 | Initial data analysis | Done; remaining SME questions tracked below |
-| 3 | Pipeline architecture + data model (SME approval) | Design complete; awaiting SME approval |
-| 4 | Build pipeline on AWS | Not started |
+| 3 | Pipeline architecture + data model (SME approval) | Done: SME approved 2026-10-14 |
+| 4 | Build pipeline on AWS | In progress (local first) |
 | 5 | Metrics (CLV, RFM, churn, trends, loyalty, locations, discounts) | Not started |
 | 6 | Streamlit dashboards | Not started |
 | 7 | Submission, CI/CD, video | Not started |
@@ -170,6 +170,13 @@ globalpartners/
 | 2026-10-10 | Q15 dropped (no SME request for names); `location_name` kept in `dim_location` but empty; dashboards show `restaurant_id` when it is NULL | User decision: keep the column, use the ids the data has |
 | 2026-10-10 | `config/business_rules.yaml` written by the user and validated (11 sections: scope, test data, customers, revenue, CLV tiers, RFM bands + segments, churn, spend trend, extract lookback, DQ threshold); every rule cites its source (SME answer or assumption) | Step 3.4: SME answers become config edits, not code changes |
 | 2026-10-10 | `.claude/` added to `.gitignore` | Claude Code worktrees must not be committed |
+| 2026-10-14 | **SME approved Step 3** ("Looks nice"); Step 4 may start | Approval gate passed |
+| 2026-10-14 | Q13 confirmed: churn active ≤ 45 / at_risk 46–90 / lapsed > 90 | SME answer |
+| 2026-10-14 | Q7 and location names recorded as data limitations; location analysis uses `restaurant_id` | SME instruction |
+| 2026-10-14 | Q3 (option per unit) and Q10 (America/New_York) kept as assumptions, labelled "not confirmed by the SME" in docs and config; Q8, Q11a, Q16 unanswered, also kept as labelled assumptions | SME: "proceed with your assumptions but clearly document them" |
+| 2026-10-14 | Spark CSV reads use `multiLine=True, escape='"'` | 12 rows have a line break inside a quoted `item_name` (`MANDARIN CARDAMOM\nJUICE`, none in 2023); a plain Spark read returns 203,531 rows instead of 203,519 and shifts columns |
+| 2026-10-14 | Local Spark sets `PYSPARK_PYTHON = sys.executable` before the SparkSession starts | Python workers otherwise start the PATH `python3` (3.13) and fail with PYTHON_VERSION_MISMATCH against a 3.11 driver |
+| 2026-10-14 | PySpark practice environment `.venv-spark` (Python 3.11.9, pyspark 3.5.6, pandas < 2.3, numpy < 2, Java 17), notebook `scripts/practice/pyspark_basics.ipynb` | Matches Glue 5.1 versions; `.venv` (3.13) stays for analysis |
 | 2026-10-10 | Step 3 package: `docs/03_architecture/Step3_Solution_Design.md` (requirements traceability, architecture, data flow, data model, business rules, security, operations, deployment, cost, limitations, open questions, approval table) + `README.md` index | Requirements doc deliverable: solution design document for SME sign-off |
 
 ## Source file baseline (Step 1)
@@ -221,17 +228,17 @@ globalpartners/
 
 1. ~~Is `restaurant_id` the `location_id` referenced in Step 5?~~ **Answered 2026-10-10: yes.**
 2. ~~Data shows `item_price` is the line total, contradicting the doc. Please confirm.~~ **Answered 2026-10-10: line total.**
-3. Is `option_price` charged × `item_quantity` (assumption) or once per line? 2023 impact: $2,739.90 (0.37 %).
+3. Is `option_price` charged × `item_quantity` (assumption) or once per line? 2023 impact: $2,739.90 (0.37 %). **2026-10-14: SME said proceed with the assumption; documented as unconfirmed.**
 4. ~~Should orders without a `user_id` be excluded from customer metrics but kept in sales/location revenue?~~ **Answered 2026-10-10: yes.**
 5. ~~Exclude `Alltown Fresh - DEVELOPMENT` orders (826 rows) as test data?~~ **Answered 2026-10-04: yes, exclude.**
 6. ~~What is the `Alltown Neighborhood Perks` app; include it?~~ **Answered 2026-10-10: include.**
-7. No negative `option_price` values exist. How are discounts represented?
+7. ~~No negative `option_price` values exist. How are discounts represented?~~ **Answered 2026-10-14: data limitation; document it.**
 8. Is the $0 menu item a comp, reward, or discount? (2023: 1 line.)
 9. ~~Are repeated identical options on one line item extras or duplicate errors?~~ **Not asked: 0 cases in 2023.**
-10. Which time zone defines the business day (timestamps are UTC)?
+10. Which time zone defines the business day (timestamps are UTC)? **2026-10-14: SME said proceed with America/New_York; documented as unconfirmed.**
 11. ~~Are the two user_ids with 2,400+ line items real customers?~~ **Answered 2026-10-05: `5ece77fe…` is faulty data, not a real customer; exclude from customer metrics, keep revenue in sales. No other non-customer accounts named.**
 12. ~~Are qty 300–500 lines legitimate (catering, bulk)?~~ **Not asked: none in 2023 (max quantity 27).**
-13. Churn: under "> 45 days = at risk", 77 % of 2023 customers are at risk at year end. Use three statuses instead: active ≤ 45 days, at_risk 46–90, lapsed > 90? *(Placeholder = yes)*
+13. ~~Churn: use three statuses active ≤ 45 days, at_risk 46–90, lapsed > 90?~~ **Answered 2026-10-14: yes.**
 14. ~~Should CLV include spend before 2023?~~ **Not a question: user decision, CLV counts 2023 orders only (2023 is the scope).**
 15. ~~Location names?~~ **Removed 2026-10-10: use the location ids as they are.**
 16. Are orders ever edited or deleted in SQL Server after placement, and can options be added to an order days later? *(Placeholder = no deletes; changes within the 3-day lookback)*
@@ -298,3 +305,8 @@ globalpartners/
   - Step 3 package sent to the SME with a walkthrough video (shared by link; `*.mov`/`*.mp4` ignored in Git after a 147 MB commit was undone before push)
   - Step 2 notebook: added findings 34 and 35 (2023 scope) in section 11, summary updated; Restart & Run All, 56 cells, 0 errors
   - Step 2 report: findings 34 and 35 added; SME answers Q1, Q2, Q4, Q6, Q11 recorded; open findings now only 23 (Q7) and 25 (Q8)
+- **2026-10-11 to 2026-10-14**
+  - PySpark practice sessions 1–3 (read, types, filter; groupBy, join, Window, cume_dist; mini daily snapshot with sequence/explode and rangeBetween); all results matched the design numbers (2,283,740 snapshot rows, $673,614.04 CLV, churn 2,409/1,553/6,550, tiers 2,103/6,604/1,805)
+  - Found: Spark needs `multiLine=True, escape='"'` for order_items.csv; `PYSPARK_PYTHON` must point to the 3.11 kernel
+  - **SME approved Step 3 (2026-10-14).** Q13 confirmed; discounts and location names documented as data limitations; Q3, Q10 (and unanswered Q8, Q11a, Q16) labelled as unconfirmed assumptions in the design doc, data model and config
+  - Step 4 started
