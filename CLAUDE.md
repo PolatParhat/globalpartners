@@ -36,6 +36,9 @@ globalpartners/
 ├── CLAUDE.md                      # Running log of decisions and changes
 ├── requirements.txt
 ├── config/                        # business_rules.yaml (SME-changeable rules)
+├── docker-compose.yml             # local stack: sqlserver, spark (Glue 5.1), spark-history
+├── docker/spark/Dockerfile        # Glue 5.1 image + PyYAML
+├── .env / .env.example            # local secrets (.env not in Git)
 ├── .gitignore
 ├── docs/                          # Everything the SME reads, in step order
 │   ├── 00_requirements/
@@ -177,6 +180,12 @@ globalpartners/
 | 2026-10-14 | Spark CSV reads use `multiLine=True, escape='"'` | 12 rows have a line break inside a quoted `item_name` (`MANDARIN CARDAMOM\nJUICE`, none in 2023); a plain Spark read returns 203,531 rows instead of 203,519 and shifts columns |
 | 2026-10-14 | Local Spark sets `PYSPARK_PYTHON = sys.executable` before the SparkSession starts | Python workers otherwise start the PATH `python3` (3.13) and fail with PYTHON_VERSION_MISMATCH against a 3.11 driver |
 | 2026-10-14 | PySpark practice environment `.venv-spark` (Python 3.11.9, pyspark 3.5.6, pandas < 2.3, numpy < 2, Java 17), notebook `scripts/practice/pyspark_basics.ipynb` | Matches Glue 5.1 versions; `.venv` (3.13) stays for analysis |
+| 2026-10-15 | Local stack in `docker-compose.yml`: `sqlserver` (SQL Server 2022 Developer, `linux/amd64` via Rosetta, named volume `mssql-data`, healthcheck `SELECT 1`), `spark` (AWS Glue 5.1 image + PyYAML, project bind-mounted at `/home/hadoop/workspace`, idle with `sleep infinity`, jobs via `docker compose exec spark spark-submit`), `spark-history` (Spark History Server on :18080); Airflow added in 4.7 | Same components as AWS; verified on M4: Spark 3.5.6-amzn-1, Python 3.11, Java 17, Iceberg 1.10, mssql-jdbc 11.2.3 all in the Glue image |
+| 2026-10-15 | `docker/spark/Dockerfile` = `public.ecr.aws/glue/aws-glue-libs:5.1.0` + `PyYAML==6.0.3`; on AWS PyYAML ships as a pinned wheel via `--additional-python-modules` (AWS-recommended, works in a private VPC) | Glue 5.1 does not include PyYAML (4.0 and 6.0 do); keeps the YAML config with comments |
+| 2026-10-15 | `config/environments.yaml` (local vs prod: raw dir, Iceberg catalog `lake` = hadoop folder `lake/` locally / Glue Data Catalog + S3 in AWS, source DB host, certificate trust, password from env var locally / Secrets Manager in AWS); `PIPELINE_ENV` selects the section | Code identical in both environments; tables always named `lake.<layer>.<table>` |
+| 2026-10-15 | Shared code: `src/globalpartners/common/config.py` (`pipeline_env`, `load_environment`, `load_business_rules`, fails fast on unknown env) and `common/spark.py` (`build_spark`: UTC, Iceberg extensions, catalog from config; `jdbc_url`: always `encrypt=true`) | Every job starts Spark and reads config the same way |
+| 2026-10-15 | Spark UI: Glue image sets `spark.ui.enabled false`; live UI via `--conf spark.ui.enabled=true` on host port 4050 (4040 was taken by the practice notebook); event logs (`/var/log/spark/apps`) kept in named volume `spark-events` and served by the History Server at :18080 | Keep the Spark UI for every finished job to diagnose skew and slow stages; verified a skewed stage shows median 0 vs max 1,800,000 records per task. On AWS: Glue Spark UI from event logs in S3 |
+| 2026-10-15 | `.env` (SA password) and `lake/` git-ignored; `.env.example` committed | Secrets and local data never in Git |
 | 2026-10-10 | Step 3 package: `docs/03_architecture/Step3_Solution_Design.md` (requirements traceability, architecture, data flow, data model, business rules, security, operations, deployment, cost, limitations, open questions, approval table) + `README.md` index | Requirements doc deliverable: solution design document for SME sign-off |
 
 ## Source file baseline (Step 1)
@@ -310,3 +319,9 @@ globalpartners/
   - Found: Spark needs `multiLine=True, escape='"'` for order_items.csv; `PYSPARK_PYTHON` must point to the 3.11 kernel
   - **SME approved Step 3 (2026-10-14).** Q13 confirmed; discounts and location names documented as data limitations; Q3, Q10 (and unanswered Q8, Q11a, Q16) labelled as unconfirmed assumptions in the design doc, data model and config
   - Step 4 started
+- **2026-10-15**
+  - Step 4.1 local foundation done (commit `253e2e4`): verified on M4 that SQL Server 2022 runs under Rosetta, the Glue 5.1 image is native arm64 with Spark 3.5.6 / Python 3.11 / Java 17 / Iceberg 1.10 / SQL Server JDBC driver; JDBC connection encrypted; Iceberg MERGE idempotent and time travel work locally
+  - Smoke test (`src/globalpartners/jobs/smoke_test.py`) passes: config loads, 203,519 raw rows, encrypted SQL Server connection, Iceberg write/read
+  - Found and fixed: PyYAML missing in Glue 5.1 (Dockerfile); port 4040 in use (live UI on 4050); Spark UI disabled in the Glue image (History Server added)
+  - Teaching change: build steps now given one file at a time, in order, with a check (user feedback)
+  - Next: Step 4.2, source database in SQL Server
