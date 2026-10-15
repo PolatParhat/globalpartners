@@ -3,3 +3,9 @@ data/raw/
 __pycache__/
 .DS_Store
 .claude/
+# Videos are shared by link, not stored in Git
+*.mov
+*.mp4
+.venv-spark/
+.env
+lake/

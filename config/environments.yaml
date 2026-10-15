@@ -1,0 +1,28 @@
+# Settings that differ between the laptop (local) and AWS (prod).
+# The pipeline code is identical in both; PIPELINE_ENV picks the section.
+local:
+  raw_dir: /home/hadoop/workspace/data/raw
+  catalog:
+    name: lake                            # tables are addressed as lake.<layer>.<table>
+    type: hadoop                          # Iceberg keeps its table list in files in a local folder
+    warehouse: /home/hadoop/workspace/lake
+  source_db:
+    host: sqlserver                       # the docker-compose service name
+    port: 1433
+    database: globalpartners
+    trust_server_certificate: true        # local SQL Server uses a self-signed certificate
+    user_env: MSSQL_USER                  # credentials come from environment variables (.env)
+    password_env: MSSQL_SA_PASSWORD
+
+prod:
+  raw_dir: null                           # on AWS the source is RDS only
+  catalog:
+    name: lake
+    type: glue                            # AWS Glue Data Catalog
+    warehouse: s3://REPLACE-WITH-LAKE-BUCKET/warehouse
+  source_db:
+    host: REPLACE-WITH-RDS-ENDPOINT
+    port: 1433
+    database: globalpartners
+    trust_server_certificate: false       # verify the RDS certificate
+    secret_name: globalpartners/sqlserver # AWS Secrets Manager

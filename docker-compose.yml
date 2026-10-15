@@ -1,0 +1,57 @@
+# Local development stack for the GlobalPartners pipeline.
+# Same components AWS runs: SQL Server (RDS in AWS) and Spark from the AWS Glue 5.1 image.
+# Airflow is added in Step 4.7.
+name: globalpartners
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64                 # SQL Server images are Intel-only; Docker Desktop runs them with Rosetta
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer                # free edition for non-production use
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+      MSSQL_MEMORY_LIMIT_MB: "2048"
+    ports:
+      - "1433:1433"                       # lets tools on the Mac connect (optional)
+    volumes:
+      - mssql-data:/var/opt/mssql         # database files survive container restarts
+    healthcheck:                          # "healthy" = SQL Server answers a query
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  spark:
+    build: docker/spark                   # AWS Glue 5.1 image + PyYAML
+    image: globalpartners-spark:5.1.0
+    depends_on:
+      sqlserver:
+        condition: service_healthy        # start only after SQL Server answers
+    environment:
+      PIPELINE_ENV: local
+      PYTHONPATH: /home/hadoop/workspace/src
+      MSSQL_USER: sa
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    volumes:
+      - .:/home/hadoop/workspace          # the project folder, shared with the container
+      - spark-events:/var/log/spark/apps  # ← NEW: every job's event log, kept for the History Server
+    working_dir: /home/hadoop/workspace
+    ports:
+      - "4050:4040"                       # live Spark UI while a job runs (needs --conf spark.ui.enabled=true)
+    command: ["-c", "sleep infinity"]     # stay up; jobs are started with `docker compose exec`
+
+  spark-history:                          # ← NEW: Spark UI for all finished jobs: http://localhost:18080
+    image: globalpartners-spark:5.1.0     # same image as the spark service
+    depends_on:
+      - spark                             # the spark service builds the image first
+    volumes:
+      - spark-events:/var/log/spark/apps  # reads the event logs the jobs write
+    ports:
+      - "18080:18080"
+    command: ["-c", "/usr/lib/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer"]
+
+volumes:
+  mssql-data:
+  spark-events:
