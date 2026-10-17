@@ -186,6 +186,12 @@ globalpartners/
 | 2026-10-15 | Shared code: `src/globalpartners/common/config.py` (`pipeline_env`, `load_environment`, `load_business_rules`, fails fast on unknown env) and `common/spark.py` (`build_spark`: UTC, Iceberg extensions, catalog from config; `jdbc_url`: always `encrypt=true`) | Every job starts Spark and reads config the same way |
 | 2026-10-15 | Spark UI: Glue image sets `spark.ui.enabled false`; live UI via `--conf spark.ui.enabled=true` on host port 4050 (4040 was taken by the practice notebook); event logs (`/var/log/spark/apps`) kept in named volume `spark-events` and served by the History Server at :18080 | Keep the Spark UI for every finished job to diagnose skew and slow stages; verified a skewed stage shows median 0 vs max 1,800,000 records per task. On AWS: Glue Spark UI from event logs in S3 |
 | 2026-10-15 | `.env` (SA password) and `lake/` git-ignored; `.env.example` committed | Secrets and local data never in Git |
+| 2026-10-17 | Source tables use typed columns (DATETIME2(3), DECIMAL(10,2), INT, BIT, DATE, VARCHAR/NVARCHAR); CSV text converted once at seed load with explicit formats | User choice A: matches the requirements doc and real systems; the extract's time-window query works on a real timestamp. Silver still validates every value |
+| 2026-10-17 | No NOT NULL / key constraints on source tables; indexes on `creation_time_utc` and `order_id` | Source quirks (e.g. the line with no lineitem_id) must reach the pipeline so quarantine is exercised |
+| 2026-10-17 | Source layout: `dbo.*` live tables (read by the pipeline), `seed.*` full CSV copy (filled by `load_seed.py`), `dbo.date_dim` loaded directly | Replay copies seed → dbo by business day to simulate daily trading |
+| 2026-10-17 | `seed.replay_days(@from_date, @to_date)`: copies whole orders (lines + options) whose New York business date is in range, in one transaction, skipping orders already live | Idempotent (repeat adds 0); options follow their order, as in the extract design |
+| 2026-10-17 | Read-only login `etl_reader` (SELECT on `dbo` only; denied on `seed` and on DELETE); password `MSSQL_ETL_PASSWORD` in `.env`; created by `sql/01_create_database.sql` via `sqlcmd -v` | Least privilege: the pipeline never uses `sa` |
+| 2026-10-17 | SQL scripts in `sql/` (01 database + login, 02 tables, 03 replay), mounted read-only into the sqlserver container at `/sql` and run with `sqlcmd` | Setup is versioned and re-runnable |
 | 2026-10-10 | Step 3 package: `docs/03_architecture/Step3_Solution_Design.md` (requirements traceability, architecture, data flow, data model, business rules, security, operations, deployment, cost, limitations, open questions, approval table) + `README.md` index | Requirements doc deliverable: solution design document for SME sign-off |
 
 ## Source file baseline (Step 1)
@@ -324,4 +330,9 @@ globalpartners/
   - Smoke test (`src/globalpartners/jobs/smoke_test.py`) passes: config loads, 203,519 raw rows, encrypted SQL Server connection, Iceberg write/read
   - Found and fixed: PyYAML missing in Glue 5.1 (Dockerfile); port 4040 in use (live UI on 4050); Spark UI disabled in the Glue image (History Server added)
   - Teaching change: build steps now given one file at a time, in order, with a check (user feedback)
-  - Next: Step 4.2, source database in SQL Server
+- **2026-10-17**
+  - Step 4.2 source database done (commit `2316935`): seed load 203,519 / 193,017 / 365 rows with money totals identical to the CSVs; known order time, malformed row, 12 line-break names and loyalty flags verified in SQL Server
+  - Replay of 2023-01-01: 63 orders, 120 lines, 105 options (matches pandas); repeat run adds 0; `etl_reader` reads dbo, denied on seed and DELETE
+  - Explained to the user: Docker/Compose, shell commands, and how `.env` → Compose → container env vars → SQL Server / Python `os.environ` → JDBC over the Docker network connect
+  - Gotcha recorded: SQL Server applies `MSSQL_SA_PASSWORD` only on first start (stored in the `mssql-data` volume); changing `.env` later needs `docker compose down -v`
+  - Next: Step 4.3, extract job (SQL Server → bronze)
