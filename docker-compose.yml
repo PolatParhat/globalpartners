@@ -11,11 +11,13 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer                # free edition for non-production use
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+      MSSQL_ETL_PASSWORD: ${MSSQL_ETL_PASSWORD:?set MSSQL_ETL_PASSWORD in .env}   # ← NEW: password for the read-only etl_reader login
       MSSQL_MEMORY_LIMIT_MB: "2048"
     ports:
       - "1433:1433"                       # lets tools on the Mac connect (optional)
     volumes:
       - mssql-data:/var/opt/mssql         # database files survive container restarts
+      - ./sql:/sql:ro                     # ← NEW: our SQL scripts, read-only, at /sql
     healthcheck:                          # "healthy" = SQL Server answers a query
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
       interval: 10s
@@ -36,13 +38,13 @@ services:
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
     volumes:
       - .:/home/hadoop/workspace          # the project folder, shared with the container
-      - spark-events:/var/log/spark/apps  # ← NEW: every job's event log, kept for the History Server
+      - spark-events:/var/log/spark/apps  # every job's event log, kept for the History Server
     working_dir: /home/hadoop/workspace
     ports:
       - "4050:4040"                       # live Spark UI while a job runs (needs --conf spark.ui.enabled=true)
     command: ["-c", "sleep infinity"]     # stay up; jobs are started with `docker compose exec`
 
-  spark-history:                          # ← NEW: Spark UI for all finished jobs: http://localhost:18080
+  spark-history:                          # Spark UI for all finished jobs: http://localhost:18080
     image: globalpartners-spark:5.1.0     # same image as the spark service
     depends_on:
       - spark                             # the spark service builds the image first
