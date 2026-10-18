@@ -192,6 +192,12 @@ globalpartners/
 | 2026-10-17 | `seed.replay_days(@from_date, @to_date)`: copies whole orders (lines + options) whose New York business date is in range, in one transaction, skipping orders already live | Idempotent (repeat adds 0); options follow their order, as in the extract design |
 | 2026-10-17 | Read-only login `etl_reader` (SELECT on `dbo` only; denied on `seed` and on DELETE); password `MSSQL_ETL_PASSWORD` in `.env`; created by `sql/01_create_database.sql` via `sqlcmd -v` | Least privilege: the pipeline never uses `sa` |
 | 2026-10-17 | SQL scripts in `sql/` (01 database + login, 02 tables, 03 replay), mounted read-only into the sqlserver container at `/sql` and run with `sqlcmd` | Setup is versioned and re-runnable |
+| 2026-10-17 | Extract job `src/globalpartners/jobs/extract_to_bronze.py`: reads `dbo.order_items` after (watermark − `extract.lookback_days`) or everything on the first run, options through their orders (`order_id IN (...)` same window), `date_dim` in full; filters run in SQL Server (JDBC `query` pushdown) | Incremental + lookback design from 3.2; options have no timestamp |
+| 2026-10-17 | Bronze tables `lake.bronze.{order_items, order_item_options, date_dim}` are append-only Iceberg tables with source types kept, plus `_batch_id`, `_ingested_at`, `_source_table`; created on first write | Delivery log; lookback re-reads are stored again and de-duplicated in silver |
+| 2026-10-17 | Watermark in `lake.ops.watermarks` (source_table, last_loaded_ts, batch_id, updated_at), MERGE-updated last and only forward (`newest > watermark`) | Failure reload: a failed run leaves the watermark, the next run re-reads the window (tested: wrong password → nothing written, watermark unchanged) |
+| 2026-10-17 | Pipeline reads SQL Server as `etl_reader` via `reader_user_env`/`reader_password_env` in `environments.yaml` and `MSSQL_ETL_USER`/`MSSQL_ETL_PASSWORD` in the spark container; `sa` (`user_env`) only for setup jobs | Least privilege |
+| 2026-10-17 | `--batch-id` argument (default UTC time `YYYYMMDDTHHMMSSZ`); Airflow will pass its run id | Every bronze row traceable to its run |
+| 2026-10-17 | Querying locally: lake via `spark-sql` with `--conf spark.sql.catalogImplementation=in-memory` plus the `lake` Iceberg settings; SQL Server via interactive `sqlcmd` or the VS Code "SQL Server (mssql)" extension (`localhost,1433`, trust certificate) | Glue image defaults to the Hive catalog backed by AWS Glue Data Catalog, which fails without AWS credentials |
 | 2026-10-10 | Step 3 package: `docs/03_architecture/Step3_Solution_Design.md` (requirements traceability, architecture, data flow, data model, business rules, security, operations, deployment, cost, limitations, open questions, approval table) + `README.md` index | Requirements doc deliverable: solution design document for SME sign-off |
 
 ## Source file baseline (Step 1)
@@ -335,4 +341,7 @@ globalpartners/
   - Replay of 2023-01-01: 63 orders, 120 lines, 105 options (matches pandas); repeat run adds 0; `etl_reader` reads dbo, denied on seed and DELETE
   - Explained to the user: Docker/Compose, shell commands, and how `.env` → Compose → container env vars → SQL Server / Python `os.environ` → JDBC over the Docker network connect
   - Gotcha recorded: SQL Server applies `MSSQL_SA_PASSWORD` only on first start (stored in the `mssql-data` volume); changing `.env` later needs `docker compose down -v`
-  - Next: Step 4.3, extract job (SQL Server → bronze)
+  - Step 4.3 extract job done (commit `98b8d95`). Tested in scratch: first run 120 / 105 / 365 rows, watermark 2023-01-01 23:14:44.948; after replaying 2 Jan the lookback run re-read both days (279 / 278) and moved the watermark to 2023-01-03 03:01:45.596; a no-new-data run left it unchanged; a failed login wrote nothing
+  - User ran the first extract on the real stack; a typo (`batch_id` instead of `_batch_id`) was fixed before commit; the existing local bronze tables still have the old column and will be rebuilt in the planned from-scratch end-to-end run
+  - Deferred by the user: Step 4.3's 2 Jan lookback demo on the real stack, to be done in the from-scratch run once the whole pipeline exists
+  - Next: Step 4.4, bronze → silver
