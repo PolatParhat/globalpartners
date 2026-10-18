@@ -13,6 +13,8 @@ local:
     trust_server_certificate: true        # local SQL Server uses a self-signed certificate
     user_env: MSSQL_USER                  # credentials come from environment variables (.env)
     password_env: MSSQL_SA_PASSWORD
+    reader_user_env: MSSQL_ETL_USER
+    reader_password_env: MSSQL_ETL_PASSWORD
 
 prod:
   raw_dir: null                           # on AWS the source is RDS only
