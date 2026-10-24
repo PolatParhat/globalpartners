@@ -1,7 +1,66 @@
 # Local development stack for the GlobalPartners pipeline.
-# Same components AWS runs: SQL Server (RDS in AWS) and Spark from the AWS Glue 5.1 image.
-# Airflow is added in Step 4.7.
+# Same components AWS runs: SQL Server (RDS in AWS), Spark from the AWS Glue 5.1 image,
+# and Airflow from the official Amazon MWAA image (built locally in Step 4.7).
 name: globalpartners
+
+# NEW: settings shared by every Airflow container (YAML anchor, reused below with <<: *airflow)
+x-airflow: &airflow
+  image: amazon-mwaa-docker-images/airflow:3.3.1-dev
+  restart: always
+  init: true
+  environment:
+    AWS_ACCESS_KEY_ID: local                # dummy values: locally nothing talks to AWS
+    AWS_SECRET_ACCESS_KEY: local
+    AWS_REGION: us-east-1
+    AWS_DEFAULT_REGION: us-east-1
+    MWAA__CORE__REQUIREMENTS_PATH: /usr/local/airflow/requirements/requirements.txt
+    MWAA__CORE__AUTH_TYPE: testing          # local only: UI without login
+    MWAA__CORE__CUSTOM_AIRFLOW_CONFIGS: "{}"
+    MWAA__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?set AIRFLOW_FERNET_KEY in .env}
+    MWAA__WEBSERVER__SECRET: '{"secret_key": "local-only-not-a-secret"}'
+    MWAA__DB__CREDENTIALS: '{"username": "airflow", "password": "airflow"}'
+    MWAA__DB__POSTGRES_DB: airflow
+    MWAA__DB__POSTGRES_HOST: airflow-db
+    MWAA__DB__POSTGRES_PORT: "5432"
+    MWAA__DB__POSTGRES_SSLMODE: prefer
+    MWAA__SQS__CREATE_QUEUE: "True"         # task queue: ElasticMQ locally, Amazon SQS in MWAA
+    MWAA__SQS__CUSTOM_ENDPOINT: http://airflow-sqs:9324
+    MWAA__SQS__QUEUE_URL: http://airflow-sqs:9324/000000000000/celery-queue
+    MWAA__SQS__USE_SSL: "False"
+    MWAA__LOGGING__AIRFLOW_DAGPROCESSOR_LOGS_ENABLED: "false"   # CloudWatch logging off locally
+    MWAA__LOGGING__AIRFLOW_DAGPROCESSOR_LOG_GROUP_ARN: ""
+    MWAA__LOGGING__AIRFLOW_DAGPROCESSOR_LOG_LEVEL: INFO
+    MWAA__LOGGING__AIRFLOW_SCHEDULER_LOGS_ENABLED: "false"
+    MWAA__LOGGING__AIRFLOW_SCHEDULER_LOG_GROUP_ARN: ""
+    MWAA__LOGGING__AIRFLOW_SCHEDULER_LOG_LEVEL: INFO
+    MWAA__LOGGING__AIRFLOW_TRIGGERER_LOGS_ENABLED: "false"
+    MWAA__LOGGING__AIRFLOW_TRIGGERER_LOG_GROUP_ARN: ""
+    MWAA__LOGGING__AIRFLOW_TRIGGERER_LOG_LEVEL: INFO
+    MWAA__LOGGING__AIRFLOW_TASK_LOGS_ENABLED: "false"
+    MWAA__LOGGING__AIRFLOW_TASK_LOG_GROUP_ARN: ""
+    MWAA__LOGGING__AIRFLOW_TASK_LOG_LEVEL: INFO
+    MWAA__LOGGING__AIRFLOW_WEBSERVER_LOGS_ENABLED: "false"
+    MWAA__LOGGING__AIRFLOW_WEBSERVER_LOG_GROUP_ARN: ""
+    MWAA__LOGGING__AIRFLOW_WEBSERVER_LOG_LEVEL: INFO
+    MWAA__LOGGING__AIRFLOW_WORKER_LOGS_ENABLED: "false"
+    MWAA__LOGGING__AIRFLOW_WORKER_LOG_GROUP_ARN: ""
+    MWAA__LOGGING__AIRFLOW_WORKER_LOG_LEVEL: INFO
+    MWAA__CORE__TASK_MONITORING_ENABLED: "false"
+    MWAA__CORE__TERMINATE_IF_IDLE: "false"
+    MWAA__CORE__MWAA_SIGNAL_HANDLING_ENABLED: "false"
+    MWAA__CORE__API_SERVER_URL: http://airflow-webserver:8080
+    MWAA_LOCAL_RUNNER: "true"
+    PIPELINE_ENV: local                       # the DAG runs jobs in our containers (prod: Glue, Step 4.9)
+    SPARK_CONTAINER: globalpartners-spark-1
+    SQLSERVER_CONTAINER: globalpartners-sqlserver-1
+  volumes:
+    - ./dags:/usr/local/airflow/dags          # our DAG files
+    - ./airflow/requirements.txt:/usr/local/airflow/requirements/requirements.txt:ro
+  depends_on:
+    airflow-db:
+      condition: service_healthy
+    airflow-sqs:
+      condition: service_healthy
 
 services:
   sqlserver:
@@ -36,8 +95,8 @@ services:
       PYTHONPATH: /home/hadoop/workspace/src
       MSSQL_USER: sa                      # admin login: setup jobs only (load_seed)
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
-      MSSQL_ETL_USER: etl_reader          # ← NEW: read-only login for the pipeline (extract)
-      MSSQL_ETL_PASSWORD: ${MSSQL_ETL_PASSWORD}   # ← NEW
+      MSSQL_ETL_USER: etl_reader          # read-only login for the pipeline (extract)
+      MSSQL_ETL_PASSWORD: ${MSSQL_ETL_PASSWORD}
     volumes:
       - .:/home/hadoop/workspace          # the project folder, shared with the container
       - spark-events:/var/log/spark/apps  # every job's event log, kept for the History Server
@@ -56,6 +115,64 @@ services:
       - "18080:18080"
     command: ["-c", "/usr/lib/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer"]
 
+
+  # ---------------- NEW: Airflow ----------------
+  airflow-db:                             # Airflow's own database (RDS-like Postgres inside MWAA)
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+
+  airflow-sqs:                            # local stand-in for Amazon SQS (the task queue)
+    image: softwaremill/elasticmq:latest
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -S -O - 127.0.0.1:9324/?Action=ListQueues"]
+      interval: 10s
+      retries: 5
+      start_period: 5s
+
+  airflow-migratedb:                      # creates/upgrades Airflow's tables once, then exits
+    <<: *airflow
+    command: migrate-db
+    restart: "no"
+
+  airflow-webserver:                      # Airflow UI: http://localhost:8080
+    <<: *airflow
+    command: webserver
+    ports:
+      - "8080:8080"
+    depends_on:
+      airflow-migratedb:
+        condition: service_completed_successfully
+
+  airflow-scheduler:                      # decides which task runs when
+    <<: *airflow
+    command: scheduler
+    depends_on:
+      airflow-migratedb:
+        condition: service_completed_successfully
+
+  airflow-worker:                         # runs the tasks
+    <<: *airflow
+    command: worker
+    group_add: ["0"]                      # may use the Docker socket (owned by group root)
+    volumes:
+      - ./dags:/usr/local/airflow/dags
+      - ./airflow/requirements.txt:/usr/local/airflow/requirements/requirements.txt:ro
+      - /var/run/docker.sock:/var/run/docker.sock   # local only: lets tasks run jobs in the spark/sqlserver containers
+    depends_on:
+      airflow-migratedb:
+        condition: service_completed_successfully
+
 volumes:
   mssql-data:
   spark-events:
+  airflow-db:                             # NEW: Airflow's database survives restarts

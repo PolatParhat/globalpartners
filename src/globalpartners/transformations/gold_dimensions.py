@@ -51,8 +51,9 @@ def dim_app(lines: DataFrame, rules: dict) -> DataFrame:
     return (lines.select("app_name").distinct()
             .withColumn("is_test_app", F.col("app_name").isin(rules["test_data"]["excluded_apps"])))
 def dim_date(spark: SparkSession, lines: DataFrame, silver_dates: DataFrame, rules: dict) -> DataFrame:
-    """Every date from 1 Jan of the first order year to 31 Dec of the last; holidays where the source has them."""
-    bounds = lines.agg(F.year(F.min("business_date")).alias("y0"), F.year(F.max("business_date")).alias("y1")).first()
+    """Every date from 1 Jan of the first order or calendar year to 31 Dec of the last; holidays where the source has them."""
+    all_dates = lines.select(F.col("business_date").alias("d")).union(silver_dates.select(F.col("date").alias("d")))
+    bounds = all_dates.agg(F.year(F.min("d")).alias("y0"), F.year(F.max("d")).alias("y1")).first()
     days = spark.sql(f"SELECT explode(sequence(DATE'{bounds.y0}-01-01', DATE'{bounds.y1}-12-31')) AS date")
     iso_dow = ((F.dayofweek("date") + 5) % 7) + 1                      # Monday = 1 … Sunday = 7
     scope = rules["reporting_scope"]
