@@ -1,0 +1,38 @@
+# Continuous integration: every push and pull request runs the unit tests.
+# Same versions as AWS Glue 5.1: Python 3.11, Java 17, Spark 3.5.6.
+name: CI
+
+on:
+  push:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read                 # read-only: CI never writes to the repo
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-24.04            # pinned: ubuntu-latest moves to a new release on its own
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+
+      - uses: actions/setup-java@v6     # Spark runs on the JVM
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install test dependencies
+        run: pip install -r tests/requirements.txt
+
+      - name: Check DAG syntax
+        run: python -m py_compile dags/*.py
+
+      - name: Run unit tests
+        run: pytest
