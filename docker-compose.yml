@@ -66,6 +66,7 @@ services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     platform: linux/amd64                 # SQL Server images are Intel-only; Docker Desktop runs them with Rosetta
+    restart: unless-stopped               # under Rosetta SQL Server can crash (e.g. after the Mac sleeps); Docker restarts it
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: Developer                # free edition for non-production use
