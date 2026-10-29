@@ -13,12 +13,12 @@ CREATE OR ALTER PROCEDURE seed.replay_days
     @to_date   DATE = NULL
 AS
 BEGIN
-    SET NOCOUNT ON;
+    SET NOCOUNT ON; -- stops SQL Server from sending "(5 rows affected)" messages after each statement.
     SET @to_date = COALESCE(@to_date, @from_date);
 
     -- orders whose New York business date falls in the range and are not live yet
     SELECT DISTINCT s.order_id
-    INTO #orders
+    INTO #orders -- temp orders table
     FROM seed.order_items AS s
     WHERE CAST(s.creation_time_utc AT TIME ZONE 'UTC' AT TIME ZONE 'Eastern Standard Time' AS DATE)
           BETWEEN @from_date AND @to_date
