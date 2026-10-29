@@ -74,4 +74,4 @@ def test_lookback_reread_keeps_newest_copy(spark, rules):
 def test_negative_price_is_quarantined(spark, rules):
     good, bad = run(spark, rules, line(item_price=Decimal("-1.00")))
     assert good == []
-    assert bad[0].reasons == "bad item_price"
+    assert bad[0].reasons == "wrong reason"
