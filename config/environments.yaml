@@ -17,14 +17,17 @@ local:
     reader_password_env: MSSQL_ETL_PASSWORD
 
 prod:
-  raw_dir: null                           # on AWS the source is RDS only
+  # ${NAME} values come from the Glue job parameters that the CDK PipelineStack sets
+  # (e.g. --LAKE_BUCKET globalpartners-lake-...); see common/job_args.py.
+  raw_dir: s3://${LAKE_BUCKET}/raw            # seed CSVs, uploaded by infra/up.sh
   catalog:
     name: lake
-    type: glue                            # AWS Glue Data Catalog
-    warehouse: s3://REPLACE-WITH-LAKE-BUCKET/warehouse
+    type: glue                                # AWS Glue Data Catalog: databases bronze, silver, gold, ops
+    warehouse: s3://${LAKE_BUCKET}/lake
   source_db:
-    host: REPLACE-WITH-RDS-ENDPOINT
+    host: ${SOURCE_DB_HOST}                   # the RDS endpoint
     port: 1433
     database: globalpartners
-    trust_server_certificate: false       # verify the RDS certificate
-    secret_name: globalpartners/sqlserver # AWS Secrets Manager
+    trust_server_certificate: true            # encrypted; certificate not verified (needs the RDS CA in a Java truststore)
+    admin_secret: ${SOURCE_ADMIN_SECRET}      # AWS Secrets Manager: RDS master login (setup jobs only)
+    reader_secret: ${SOURCE_READER_SECRET}    # AWS Secrets Manager: read-only etl_reader login

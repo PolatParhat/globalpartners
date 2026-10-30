@@ -3,12 +3,14 @@
 The CSV text is converted to typed columns here, once, with explicit formats.
 Run after sql/01_create_database.sql and sql/02_create_tables.sql.
 """
-import os
+import argparse
 
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 
 from globalpartners.common.config import load_environment
+from globalpartners.common.credentials import login
+from globalpartners.common.job_args import parse_job_args
 from globalpartners.common.spark import build_spark, jdbc_url
 
 TIMESTAMP_FORMAT = "yyyy-MM-dd'T'HH:mm:ss[.SSS]X"   # ISO 8601, 0-3 digit fraction, 'Z'
@@ -28,11 +30,12 @@ def to_bool(col: str):
 
 def write_table(df: DataFrame, table: str, db: dict) -> None:
     """Replace the rows of an existing SQL Server table, keeping its column definitions."""
+    user, password = login(db, admin=True)
     (df.write.format("jdbc")
        .option("url", jdbc_url(db))
        .option("dbtable", table)
-       .option("user", os.environ[db["user_env"]])
-       .option("password", os.environ[db["password_env"]])
+       .option("user", user)
+       .option("password", password)
        .option("truncate", "true")          # empty the table instead of dropping it
        .option("batchsize", 10000)
        .mode("overwrite")
@@ -40,6 +43,7 @@ def write_table(df: DataFrame, table: str, db: dict) -> None:
 
 
 def main() -> None:
+    parse_job_args(argparse.ArgumentParser())
     env = load_environment()
     spark = build_spark("load-seed", env)
     spark.sparkContext.setLogLevel("ERROR")

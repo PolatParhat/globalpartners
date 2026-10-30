@@ -1,7 +1,6 @@
 """Step 4.1 smoke test: config loads, Spark reads the raw CSV, reaches SQL Server, writes Iceberg."""
-import os
-
 from globalpartners.common.config import load_business_rules, load_environment, pipeline_env
+from globalpartners.common.credentials import login
 from globalpartners.common.spark import build_spark, jdbc_url
 
 
@@ -17,10 +16,11 @@ def main() -> None:
     print(f"2. raw order_items rows: {items.count():,} (expected 203,519)")
 
     db = env["source_db"]
+    user, password = login(db, admin=True)
     row = (spark.read.format("jdbc")
            .option("url", jdbc_url(db, database="master"))      # the globalpartners database is created in 4.2
-           .option("user", os.environ[db["user_env"]])
-           .option("password", os.environ[db["password_env"]])
+           .option("user", user)
+           .option("password", password)
            .option("query", "SELECT @@VERSION AS version, CAST(encrypt_option AS varchar(5)) AS encrypted "
                             "FROM sys.dm_exec_connections WHERE session_id = @@SPID")
            .load().first())

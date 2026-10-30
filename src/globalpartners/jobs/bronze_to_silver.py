@@ -8,6 +8,7 @@ import argparse
 from pyspark.sql import functions as F
 
 from globalpartners.common.config import load_business_rules, load_environment
+from globalpartners.common.job_args import parse_job_args
 from globalpartners.common.run_log import logged_run
 from globalpartners.common.spark import build_spark
 from globalpartners.common.tables import merge_into
@@ -18,7 +19,7 @@ from globalpartners.transformations import silver_date_dim, silver_order_item_op
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-id", help="extract batch to process (default: the latest one in bronze)")
-    args = parser.parse_args()
+    args = parse_job_args(parser)
 
     env = load_environment()
     rules = load_business_rules()

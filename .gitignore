@@ -10,3 +10,7 @@ __pycache__/
 .env
 lake/
 test.py
+# CDK: synthesized templates, collected build files, deploy outputs
+infra/cdk.out/
+infra/build/
+infra/outputs.json

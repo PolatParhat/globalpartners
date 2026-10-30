@@ -35,7 +35,7 @@ scripts/       One-off analysis scripts (Steps 1–2)
 sql/           SQL Server table definitions and seed-data load (Step 4)
 src/           PySpark pipeline (Steps 4–5)
 dashboard/     Streamlit app (Step 6)
-infra/         AWS CDK infrastructure (Step 4)
+infra/         AWS CDK infrastructure + up.sh / down.sh (Step 4.9, see infra/README.md)
 tests/         Automated tests
 data/raw/      Source CSV files (not in Git; checksums in the Step 1 report)
 ```
