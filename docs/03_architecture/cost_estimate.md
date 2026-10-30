@@ -13,8 +13,9 @@ and choose the cheapest setup that still meets the SME's requirements
 | 1. Local development (Docker on the developer's Mac) | **$0** | All components run locally |
 | 2. AWS, "as first designed", always on 24/7 | **≈ $455** | 79 % of it is the always-on Airflow environment |
 | 3. AWS, optimized, always on 24/7 | **≈ $307** | MWAA micro, Glue Flex |
-| 4. AWS, optimized, deployed only when needed (**chosen**) | **≈ $22** in a working month, **≈ $2** idle | Pipeline stack created and destroyed with CDK |
-| 5. One always-on week before submission (**chosen**) | **≈ $71** once | Proves unattended daily operation |
+| 4. AWS, optimized, deployed only when needed | **≈ $22** in a working month, **≈ $2** idle | Pipeline stack created and destroyed with CDK |
+| 5. ~~One always-on week before submission~~ | ~~≈ $71 once~~ | Replaced on 2026-10-30 by phase 6 |
+| 6. **One demo deployment** (**chosen 2026-10-30**) | **≈ $4–7 once** (≈ $13 on a bad day) | Build and test everything locally; deploy once, verify, run the DAG 2–3 times, record the video, delete everything. See section 5, scenario D |
 
 All prices are **on-demand list prices for us-east-1**, taken from the AWS Price List API on
 2026-10-07, before tax and before any Free Tier or credits. Section 6 compares us-west-1.
@@ -180,10 +181,41 @@ Trade-off: a full deploy takes about 40 minutes (creating the MWAA environment t
 minutes, restoring RDS about 15), so a session has to be planned. For a learning project and
 SME demos, that is acceptable.
 
-### One always-on week before submission (chosen, ≈ $71 once)
+### One always-on week before submission (≈ $71 once; replaced by scenario D on 2026-10-30)
 
 Scenario B for 168 hours: 168 × $0.42 ≈ **$71** (3 days ≈ $30). Shows the pipeline running
 unattended on schedule for 7 daily runs, with alerts, before the final submission.
+
+### Scenario D: one demo deployment (chosen 2026-10-30, ≈ $4–7 once)
+
+Everything (pipeline, metrics, dashboard, docs) is built and tested locally first. Then
+`infra/up.sh` creates both stacks once; the pipeline is verified, the DAG is run 2–3 times,
+the video is recorded, and `infra/down.sh` deletes everything and checks nothing is left.
+
+**Per hour with everything deployed:**
+
+| Resource | $/hour | Share |
+|---|---|---|
+| MWAA micro environment | 0.290 | 69 % |
+| NAT gateway + its public IPv4 | 0.050 | 12 % |
+| Load balancer + 2 public IPv4 (dashboard, Step 6) | 0.033 | 8 % |
+| RDS SQL Server Express db.t3.micro + 20 GB | 0.025 | 6 % |
+| Fargate task (Streamlit, Step 6) | 0.012 | 3 % |
+| KMS key, secrets, S3, alarms (monthly prices per hour) | 0.004 | 1 % |
+| **Total** | **≈ 0.42** | |
+
+**Glue (per use, standard class so a demo never waits for Flex capacity):** setup + seed load
+≈ $0.07, first full load ≈ $0.37, each daily run ≈ $0.22.
+
+| Scenario | Hours deployed | Per hour | Glue | Small items | **Total** |
+|---|---|---|---|---|---|
+| Smooth: deploy, verify, record in one sitting | 5 | $2.10 | $1.10 | $0.30 | **≈ $3.50** |
+| Realistic: a failed first deploy or two, longer recording | 10 | $4.20 | $1.50 | $0.50 | **≈ $6–7** |
+| Bad day: troubleshooting, a forgotten night | 24 | $10.10 | $2.00 | $0.60 | **≈ $13** |
+
+MWAA bills until it is fully deleted (≈ 20–30 minutes), so `down.sh` runs right after recording.
+The KMS key is scheduled for deletion (7 days, the minimum). Sign-up credits in
+Billing → Credits may cover all of it.
 
 ### One-off: replaying all of 2023
 

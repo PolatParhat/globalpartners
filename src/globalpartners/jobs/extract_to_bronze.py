@@ -13,6 +13,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from globalpartners.common.config import load_business_rules, load_environment
+from globalpartners.common.job_args import parse_job_args
 from globalpartners.common.run_log import logged_run
 from globalpartners.common.source import read_source
 from globalpartners.common.spark import build_spark
@@ -56,7 +57,7 @@ def append_bronze(df: DataFrame, catalog: str, source_table: str, batch_id: str)
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch-id", default=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
-    batch_id = parser.parse_args().batch_id
+    batch_id = parse_job_args(parser).batch_id
 
     env = load_environment()
     rules = load_business_rules()
