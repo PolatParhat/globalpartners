@@ -33,6 +33,9 @@ Currently doing a beginner walkthrough of the 4.9 files, one file per message: *
   worktree-step-4.8-tests-ci, worktree-step-4.9-cdk, practice/negative-price-test (local),
   worktree-sqlserver-restart-policy (restart policy declined by the user; keep only if they change their mind).
 - Planned learning: deep-dive sessions after the build on tools the user picks (must-haves: pytest, GitHub Actions).
+- **Planned at the end of the build (requested 2026-10-31): a Bash / command-line course with lots of practice**
+  (flags, pipes, `&&`/`||`, `$(...)`, `export`, `set -euo pipefail`, tests like `[ -f ]`, loops), using this
+  project's real scripts (`infra/up.sh`, `down.sh`, docker, aws, git) as exercises. Claude builds it for the user.
 - SME assumptions still unconfirmed: Q3, Q8, Q10, Q11a, Q16 (see CLAUDE.md).
 
 ## Environment gotchas
