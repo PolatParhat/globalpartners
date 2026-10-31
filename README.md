@@ -24,7 +24,7 @@ metric. Built step by step for SME review, to production standard.
 | 7 | Submission, CI/CD, video | Not started | |
 
 Requirements: [`docs/00_requirements/`](docs/00_requirements/GlobalPartners_Business_Analysis_Requirements.docx).
-Running log of decisions: [`CLAUDE.md`](CLAUDE.md).
+Decisions and change log: [`docs/decisions.md`](docs/decisions.md) · current state: [`STATUS.md`](STATUS.md) · project rules: [`CLAUDE.md`](CLAUDE.md).
 
 ## Repository layout
 
