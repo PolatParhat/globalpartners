@@ -95,7 +95,7 @@ def run_checks(spark: SparkSession, lake: str, db: dict, batch_id: str, rules: d
 
 
 def metric_checks(spark: SparkSession, lake: str, rules: dict) -> list[dict]:
-    """Tie-outs for gold.sales_daily, gold.sales_daily_category and gold.customer_daily_snapshot."""
+    """Tie-outs for gold.sales_daily, gold.sales_daily_category, gold.location_summary and gold.customer_daily_snapshot."""
     t = lambda name: spark.table(f"{lake}.{name}")
     fact_orders, snapshot = t("gold.fact_order"), t("gold.customer_daily_snapshot")
     results = []
@@ -105,6 +105,13 @@ def metric_checks(spark: SparkSession, lake: str, rules: dict) -> list[dict]:
         total = t(f"gold.{table}").agg(F.sum("revenue")).first()[0]
         results.append(result(f"{table}_ties_to_fact_order", total, revenue, total == revenue,
                               "Σ revenue = Σ fact_order.order_revenue in scope (test data out)"))
+
+    by_location = t("gold.location_summary")
+    location_revenue, location_orders = by_location.agg(F.sum("revenue"), F.sum("orders")).first()
+    scope_orders = sales.in_sales_scope(fact_orders, rules).count()
+    results.append(result("location_summary_ties_to_fact_order", f"{location_revenue} / {location_orders}",
+                          f"{revenue} / {scope_orders}", location_revenue == revenue and location_orders == scope_orders,
+                          "Σ revenue and Σ orders over restaurants = fact_order in scope"))
 
     customer_revenue = customer_snapshot.customer_orders(fact_orders, rules).agg(F.sum("order_revenue")).first()[0]
     snapshot_revenue = snapshot.agg(F.sum("revenue_on_day")).first()[0]
