@@ -1,16 +1,20 @@
 # Status: GlobalPartners Business Insights Pipeline
-Updated: 2026-11-01 by /handoff (end of the Step 5 build session)
+Updated: 2026-11-01 by Claude (after the DQ failure fix)
 
 ## Where we are
-Step 4 (local pipeline 4.1–4.8, AWS CDK code 4.9) is merged to main; 4.9 is **not deployed**.
-**Step 5 (metrics) is built and verified; PR #4 is open and CI is green**
-(https://github.com/PolatParhat/globalpartners/pull/4, branch `worktree-step-5-metrics`, folder
-`.claude/worktrees/step-5-metrics`). **Waiting for the user to review and merge**; it is not on main yet, so the
-user's local stack (Docker containers mount the main folder) does not have the new code.
-The 4.9 beginner walkthrough stands at **files 1–12 of 14**; files 13 (`cleanup.py` + `down.sh`) and 14 (infra tests + CI)
-are not explained yet.
+Step 4 (local pipeline 4.1–4.8, AWS CDK code 4.9) and **Step 5 (metrics, PR #4)** are merged to main; 4.9 is **not deployed**.
+The user's local stack runs the Step 5 code: metric tables exist in the lake, `dq_checks` is 24/24 PASS (run by Claude on 2026-11-01).
+Step 6 (Streamlit dashboard) is next. The 4.9 beginner walkthrough stands at **files 1–12 of 14**; files 13 (`cleanup.py` + `down.sh`)
+and 14 (infra tests + CI) are not explained yet.
 
-## Done in the last session (2026-10-31)
+## Incident 2026-11-01 (fixed)
+`dq_checks` failed `source_lines_reach_bronze` (463 vs 0) and `source_options_reach_silver` (429 vs 0) on the 06:00 scheduled run
+and a manual run. Cause: Claude re-ran `setup_source` on 2026-10-31 as a demo; `sql/02_create_tables.sql` DROPs and recreates
+`dbo.*` and `seed.*`, so SQL Server was emptied while the lake kept 3 days. Fix: `load_seed` (203,519 / 193,017 / 365), then
+`replay_day --date 2023-01-01 --to-date 2023-01-03` (289 orders / 463 lines / 429 options), then `dq_checks` 24/24 PASS.
+The docstring and 02's header now carry a warning (branch `worktree-fix-setup-source-docs`).
+
+## Done in the Step 5 session (2026-10-31)
 - Step 5 code (commits `01fcab5`, `8e80abf`, `f848bbb`): `metrics/sales.py` (sales_daily, sales_daily_category),
   `metrics/customer_snapshot.py` (dense calendar, totals/CLV, loyalty, 90/30-day windows, cume_dist tiers, RFM, churn),
   job `jobs/gold_metrics.py` (full rebuild, snapshot partitioned by month), 5 new DQ checks (`metric_checks`, 24 total),
@@ -23,8 +27,8 @@ are not explained yet.
 - User chose Step 5 before deploying; the AWS demo and the video wait until Steps 5 and 6 exist.
 
 ## Next actions
-1. **User merges PR #4** (CI green: unit-tests and infra pass). Then in the main folder `git pull`, and in the user's stack run `docker compose exec spark spark-submit src/globalpartners/jobs/gold_metrics.py`
-   and trigger the DAG once in the Airflow UI (pick 06:00) to see the new step green; `dq_checks` should show 24/24 PASS.
+1. In the Airflow UI, clear the failed `dq_checks` task of today's two runs (06:00 scheduled and the manual one) so they turn green;
+   or trigger a new run (pick 06:00) and watch `gold_metrics` and `dq_checks` pass. Merge the docs-fix PR (setup_source warning).
 2. Step 6: Streamlit dashboard (local Docker first, then ECS Fargate + ALB in PipelineStack; CDK tests/cost doc update).
 3. Finish the 4.9 walkthrough (files 13–14), concept level: what `down.sh`/`cleanup.py` remove and how the leftover check works.
 4. Single AWS deployment (user runs `infra/up.sh`), verify, run the DAG 2–3×, record the video with speaker notes
@@ -39,11 +43,14 @@ are not explained yet.
   (flags, pipes, `&&`/`||`, `$(...)`, `export`, `set -euo pipefail`, tests like `[ -f ]`, loops), using this
   project's real scripts (`infra/up.sh`, `down.sh`, docker, aws, git) as exercises. Claude builds it for the user.
 - Planned learning: deep-dive sessions on tools the user picks (must-haves: pytest, GitHub Actions).
-- The two most recent **scheduled** Airflow runs (30 and 31 Oct) are `failed` in the local Airflow database; not investigated
-  (possibly the known SQL Server crash). Check before the Airflow run in action 1.
+- The scheduled Airflow runs of 30 and 31 Oct are `failed` in the local Airflow database; cause not investigated (they happened
+  before the 2026-11-01 incident, so it is not that one; possibly the known SQL Server crash).
 - SME assumptions still unconfirmed: Q3, Q8, Q10, Q11a, Q16 (see CLAUDE.md).
 
 ## Environment gotchas
+- **Never run `setup_source` on a stack that holds data**: script 02 DROPs `dbo.*` and `seed.*` and recreates them empty.
+  Restore: `docker compose exec spark spark-submit src/globalpartners/jobs/load_seed.py`, then
+  `docker compose exec spark spark-submit src/globalpartners/jobs/replay_day.py --date 2023-01-01 --to-date 2023-01-03`.
 - **SQL Server container crashes** under Rosetta (seen 3×, `RETAIL ASSERT … timeout or deadlock`), often
   overnight. Symptom: "TCP/IP connection to the host sqlserver … failed" or Airflow "409 Conflict".
   Fix: `docker compose up -d sqlserver` (data is safe in the volume). No restart policy (user's choice).
