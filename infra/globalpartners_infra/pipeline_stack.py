@@ -1,4 +1,4 @@
-"""PipelineStack: the parts that run (≈ $0.43/hour while deployed, mostly MWAA).
+"""PipelineStack: the parts that run (≈ $0.42/hour while deployed, mostly MWAA).
 
 - network        VPC in 2 zones: public subnets (NAT gateway) + private subnets (everything else)
 - source         RDS SQL Server Express + 2 logins in Secrets Manager (admin, read-only etl_reader)

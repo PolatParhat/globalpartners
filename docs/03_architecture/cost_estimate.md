@@ -108,7 +108,7 @@ A month is taken as **730 hours**.
 | Glue per day | 5 jobs × 2 DPU × 3/60 h = **0.5 DPU-hours** | → $0.22/day standard, $0.145/day Flex |
 | Orchestrator per day | 6 tasks × ≈ 3.5 min ≈ **20 task-minutes** | Each Glue task waits for its job |
 | Lake size | < 1 GB (Parquet is compressed; Iceberg keeps some old snapshots) | Source CSVs are 55 MB |
-| Dashboard | 1 Fargate task, 0.25 vCPU / 0.5 GB | Streamlit for a handful of users |
+| Dashboard | 1 Fargate task, 0.5 vCPU / 1 GB, ARM64 (was 0.25 / 0.5 GB until 2026-11-01; Step 6 showed it is too tight) | Streamlit for a handful of users |
 | Logs | < 5 GB/month | Inside the CloudWatch free tier |
 
 ---
@@ -200,7 +200,7 @@ the video is recorded, and `infra/down.sh` deletes everything and checks nothing
 | NAT gateway + its public IPv4 | 0.050 | 12 % |
 | Load balancer + 2 public IPv4 (dashboard, Step 6) | 0.033 | 8 % |
 | RDS SQL Server Express db.t3.micro + 20 GB | 0.025 | 6 % |
-| Fargate task (Streamlit, Step 6) | 0.012 | 3 % |
+| Fargate task (Streamlit, Step 6: 1 task, 0.5 vCPU / 1 GB, ARM64; updated 2026-11-01 from 0.25 / 0.5 GB, which is too tight for Streamlit + pandas) | 0.020 | 5 % |
 | KMS key, secrets, S3, alarms (monthly prices per hour) | 0.004 | 1 % |
 | **Total** | **≈ 0.42** | |
 

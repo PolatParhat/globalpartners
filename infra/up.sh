@@ -4,7 +4,7 @@
 #   infra/up.sh                     deploy, then create + load the source database
 #   infra/up.sh you@example.com     same, and email an alert when a Glue job fails
 #
-# Costs ≈ $0.43 per hour from now on, until infra/down.sh has finished.
+# Costs ≈ $0.42 per hour from now on, until infra/down.sh has finished.
 # Needs Docker running (cdk deploy builds the dashboard image) and internet (to find your public IP:
 # only that address may open the dashboard).
 set -euo pipefail
@@ -17,7 +17,7 @@ MY_IP=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
 
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 echo "This creates the GlobalPartners pipeline in AWS account $ACCOUNT, region $AWS_REGION."
-echo "It costs about \$0.43 per hour until infra/down.sh has finished."
+echo "It costs about \$0.42 per hour until infra/down.sh has finished."
 echo "The dashboard will only open from your current IP address ($MY_IP)."
 read -r -p "Type the account id to continue: " answer
 [ "$answer" = "$ACCOUNT" ] || { echo "Cancelled, nothing was created."; exit 1; }

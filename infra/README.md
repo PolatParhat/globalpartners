@@ -5,7 +5,7 @@ Two CloudFormation stacks, written in Python with the AWS CDK, region **us-east-
 | Stack | Contents | Cost while deployed |
 |---|---|---|
 | `GlobalPartnersData` | KMS key, S3 lake bucket (seed CSVs + Iceberg tables), S3 artifacts bucket (job code, DAG), Glue databases `bronze` `silver` `gold` `ops`, Athena workgroup | ≈ $2 / month |
-| `GlobalPartnersPipeline` | VPC + NAT, RDS SQL Server Express, 2 logins in Secrets Manager, 8 Glue jobs, MWAA (Airflow 3.3.1, micro), alerts (EventBridge → SNS email), **dashboard: Streamlit on ECS Fargate (1 ARM64 task, 0.5 vCPU / 1 GB, private subnet) behind an Application Load Balancer** | ≈ $0.43 / hour |
+| `GlobalPartnersPipeline` | VPC + NAT, RDS SQL Server Express, 2 logins in Secrets Manager, 8 Glue jobs, MWAA (Airflow 3.3.1, micro), alerts (EventBridge → SNS email), **dashboard: Streamlit on ECS Fargate (1 ARM64 task, 0.5 vCPU / 1 GB, private subnet) behind an Application Load Balancer** | ≈ $0.42 / hour |
 
 ## Commands
 

@@ -24,8 +24,8 @@ data findings, SME Q&A, change log): `docs/decisions.md`; read it before re-deci
 | 2 | Initial data analysis | Done |
 | 3 | Architecture + data model (SME approval) | Done (approved 2026-10-14) |
 | 4 | Build pipeline: local first (4.1–4.8 done), then AWS CDK (4.9 code done, not deployed) | In progress |
-| 5 | Metrics: `customer_daily_snapshot`, `sales_daily`, `sales_daily_category` | Code + tests done, matches the full-year reference; on branch `worktree-step-5-metrics`, PR pending |
-| 6 | Streamlit dashboard (adds ECS Fargate + ALB to PipelineStack) | Not started |
+| 5 | Metrics: `customer_daily_snapshot`, `sales_daily`, `sales_daily_category`, `location_summary` | Done (PR #4 merged; `location_summary` added in Step 6); matches the full-year reference |
+| 6 | Streamlit dashboard (6 pages) + ECS Fargate + ALB in PipelineStack | Code + tests done on branch `worktree-step-6-dashboard`, PR pending; works locally against a full-year demo lake; the AWS part is written, not deployed |
 | 7 | Single AWS deployment, verify, record video, delete; submission | Not started |
 
 ## Key facts (a fresh session must not get these wrong)
@@ -50,17 +50,18 @@ globalpartners/
 ├── CLAUDE.md · STATUS.md · README.md      rules · current state · SME-facing index
 ├── config/                                environments.yaml (local/prod), business_rules.yaml
 ├── docs/                                  SME documents by step + decisions.md (history)
-├── scripts/                               Step 1–2 analysis (pandas, notebook)
+├── scripts/                               Step 1–2 analysis (pandas, notebook); build_demo_lake.py (full-year lake for the dashboard)
 ├── sql/                                   01 database + etl_reader login, 02 tables, 03 replay procedure
 ├── src/globalpartners/
 │   ├── common/                            config, spark, job_args, credentials, source, sqlserver, tables, run_log
 │   ├── transformations/                   pure functions: cleaning, silver_*, gold_facts, gold_dimensions
-│   ├── quality/                           quarantine, checks (24 DQ checks)
+│   ├── quality/                           quarantine, checks (25 DQ checks)
 │   ├── jobs/                              entry points: setup_source, load_seed, replay_day, extract_to_bronze,
 │   │                                      bronze_to_silver, silver_to_gold, gold_metrics, dq_checks, smoke_test
-│   └── metrics/                           sales, customer_snapshot (pure functions, Step 5)
+│   └── metrics/                           sales, customer_snapshot, location (pure functions, Steps 5–6)
+├── dashboard/                             Streamlit app: queries (SQL), logic (pandas), views (6 pages), data (Spark|Athena), Dockerfile (AWS)
 ├── dags/globalpartners_daily.py           Airflow DAG (local: docker exec; AWS: GlueJobOperator)
-├── docker-compose.yml, docker/, airflow/  local stack: sqlserver, spark (Glue 5.1), spark-history, MWAA 3.3.1
+├── docker-compose.yml, docker/, airflow/  local stack: sqlserver, spark (Glue 5.1), spark-history, dashboard, MWAA 3.3.1
 ├── infra/                                 AWS CDK (2 stacks), up.sh, down.sh, cleanup.py, tests (see infra/README.md)
 ├── tests/                                 pytest unit tests (run in the spark container or CI)
 ├── .github/workflows/ci.yml               unit tests + infra synth/tests on every push
@@ -78,7 +79,8 @@ globalpartners/
 - Code changes on a branch (worktree) → CI green → PR → user merges. Never push to main.
 - Local commands: jobs `docker compose exec spark spark-submit src/globalpartners/jobs/<job>.py`;
   tests `docker compose exec spark python3 -m pytest`; Airflow UI http://localhost:8080;
-  Spark History http://localhost:18080.
+  Spark History http://localhost:18080; dashboard `docker compose up -d dashboard` → http://localhost:8501
+  (full-year demo data: README, "Run the dashboard").
 - Debugging: VS Code attached to the `globalpartners-spark-1` container, "Python Debugger: Debug Python File".
 
 ## Open SME items (unconfirmed assumptions, documented in the design doc)
