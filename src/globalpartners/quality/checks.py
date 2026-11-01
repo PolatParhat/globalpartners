@@ -3,6 +3,7 @@ from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql import functions as F
 
 from globalpartners.common.source import read_source
+from globalpartners.metrics import customer_snapshot, sales
 
 
 def result(name: str, observed, expected, passed: bool, details: str = "", severity: str = "FAIL") -> dict:
@@ -87,4 +88,36 @@ def run_checks(spark: SparkSession, lake: str, db: dict, batch_id: str, rules: d
                           WHERE i.order_id = o.order_id AND i.lineitem_id = o.lineitem_id)""").first()["n"]
     results.append(result("source_orphan_options", orphans, 0, orphans == 0, "options without a parent line in SQL Server",
                           severity="WARN"))
+
+    # 9. Metrics tie out to the facts (design sections 7 and 10)
+    results += metric_checks(spark, lake, rules)
+    return results
+
+
+def metric_checks(spark: SparkSession, lake: str, rules: dict) -> list[dict]:
+    """Tie-outs for gold.sales_daily, gold.sales_daily_category and gold.customer_daily_snapshot."""
+    t = lambda name: spark.table(f"{lake}.{name}")
+    fact_orders, snapshot = t("gold.fact_order"), t("gold.customer_daily_snapshot")
+    results = []
+
+    revenue = sales.in_sales_scope(fact_orders, rules).agg(F.sum("order_revenue")).first()[0]
+    for table in ("sales_daily", "sales_daily_category"):
+        total = t(f"gold.{table}").agg(F.sum("revenue")).first()[0]
+        results.append(result(f"{table}_ties_to_fact_order", total, revenue, total == revenue,
+                              "Σ revenue = Σ fact_order.order_revenue in scope (test data out)"))
+
+    customer_revenue = customer_snapshot.customer_orders(fact_orders, rules).agg(F.sum("order_revenue")).first()[0]
+    snapshot_revenue = snapshot.agg(F.sum("revenue_on_day")).first()[0]
+    results.append(result("snapshot_ties_to_fact_order", snapshot_revenue, customer_revenue,
+                          snapshot_revenue == customer_revenue, "Σ revenue_on_day = customer revenue in fact_order"))
+
+    rows, keys = snapshot.count(), distinct_rows(snapshot, ["snapshot_date", "customer_id"])
+    results.append(result("snapshot_key_is_unique", rows, keys, rows == keys, "one row per customer per day"))
+
+    last_day = snapshot.agg(F.max("snapshot_date")).first()[0]
+    short = (snapshot.groupBy("customer_id")
+             .agg(F.count(F.lit(1)).alias("n"), F.min("snapshot_date").alias("first_day"))
+             .where(F.col("n") != F.datediff(F.lit(last_day), F.col("first_day")) + 1).count())
+    results.append(result("snapshot_is_dense", short, 0, short == 0,
+                          "every customer has a row for every day from the first order to the last loaded day"))
     return results

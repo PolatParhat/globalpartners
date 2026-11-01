@@ -1,4 +1,4 @@
-"""GlobalPartners daily pipeline: replay → extract → silver → gold → data-quality checks.
+"""GlobalPartners daily pipeline: replay → extract → silver → gold → metrics → data-quality checks.
 
 One run per business day. The run's logical date is the business day being loaded, and its
 run_id is passed to every job as --batch-id, so every row can be traced back to this run.
@@ -16,7 +16,7 @@ from airflow.sdk import dag, task
 PIPELINE_ENV = os.environ.get("PIPELINE_ENV") or os.environ.get("AIRFLOW__GLOBALPARTNERS__PIPELINE_ENV", "local")
 SPARK_CONTAINER = os.environ.get("SPARK_CONTAINER", "globalpartners-spark-1")
 SQLSERVER_CONTAINER = os.environ.get("SQLSERVER_CONTAINER", "globalpartners-sqlserver-1")
-SPARK_JOBS = ["extract_to_bronze", "bronze_to_silver", "silver_to_gold", "dq_checks"]
+SPARK_JOBS = ["extract_to_bronze", "bronze_to_silver", "silver_to_gold", "gold_metrics", "dq_checks"]
 GLUE_JOB_PREFIX = os.environ.get("GLUE_JOB_PREFIX", "globalpartners-")
 
 
