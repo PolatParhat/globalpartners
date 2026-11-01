@@ -3,6 +3,9 @@
 -- lineitem_id) and they must reach the pipeline, where quarantine handles them.
 -- dbo.*  = the live tables the pipeline reads (filled by the replay)
 -- seed.* = every row from the CSV files (filled once by load_seed.py)
+--
+-- WARNING: this script DROPs the tables below and recreates them EMPTY. Run it for a new database only.
+-- Running it again deletes the live and seed data; restore with load_seed, then replay_day.
 
 USE globalpartners;
 GO
