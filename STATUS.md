@@ -1,16 +1,17 @@
 # Status: GlobalPartners Business Insights Pipeline
-Updated: 2026-10-31 by Claude (end of the Step 5 build session)
+Updated: 2026-11-01 by /handoff (end of the Step 5 build session)
 
 ## Where we are
 Step 4 (local pipeline 4.1–4.8, AWS CDK code 4.9) is merged to main; 4.9 is **not deployed**.
-**Step 5 (metrics) is built and verified on branch `worktree-step-5-metrics`** (folder
-`.claude/worktrees/step-5-metrics`), **not yet pushed, no PR yet, not on main**. The user's local stack (Docker
-containers mount the main folder) does not have the new code until the PR is merged.
+**Step 5 (metrics) is built and verified; PR #4 is open and CI is green**
+(https://github.com/PolatParhat/globalpartners/pull/4, branch `worktree-step-5-metrics`, folder
+`.claude/worktrees/step-5-metrics`). **Waiting for the user to review and merge**; it is not on main yet, so the
+user's local stack (Docker containers mount the main folder) does not have the new code.
 The 4.9 beginner walkthrough stands at **files 1–12 of 14**; files 13 (`cleanup.py` + `down.sh`) and 14 (infra tests + CI)
 are not explained yet.
 
 ## Done in the last session (2026-10-31)
-- Step 5 code (3 commits on the branch): `metrics/sales.py` (sales_daily, sales_daily_category),
+- Step 5 code (commits `01fcab5`, `8e80abf`, `f848bbb`): `metrics/sales.py` (sales_daily, sales_daily_category),
   `metrics/customer_snapshot.py` (dense calendar, totals/CLV, loyalty, 90/30-day windows, cume_dist tiers, RFM, churn),
   job `jobs/gold_metrics.py` (full rebuild, snapshot partitioned by month), 5 new DQ checks (`metric_checks`, 24 total),
   DAG step `gold_metrics` between `silver_to_gold` and `dq_checks`, Glue job registered in `infra/.../names.py` (8 jobs).
@@ -22,8 +23,7 @@ are not explained yet.
 - User chose Step 5 before deploying; the AWS demo and the video wait until Steps 5 and 6 exist.
 
 ## Next actions
-1. **Push the branch and open the Step 5 PR** (needs the user's OK; CI must be green), user reviews and merges.
-   After the merge: in the user's stack run `docker compose exec spark spark-submit src/globalpartners/jobs/gold_metrics.py`
+1. **User merges PR #4** (CI green: unit-tests and infra pass). Then in the main folder `git pull`, and in the user's stack run `docker compose exec spark spark-submit src/globalpartners/jobs/gold_metrics.py`
    and trigger the DAG once in the Airflow UI (pick 06:00) to see the new step green; `dq_checks` should show 24/24 PASS.
 2. Step 6: Streamlit dashboard (local Docker first, then ECS Fargate + ALB in PipelineStack; CDK tests/cost doc update).
 3. Finish the 4.9 walkthrough (files 13–14), concept level: what `down.sh`/`cleanup.py` remove and how the leftover check works.
