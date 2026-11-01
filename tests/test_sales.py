@@ -6,7 +6,7 @@ from globalpartners.metrics import sales
 
 ORDERS = ("order_id string, business_date date, order_hour_local int, restaurant_id string, "
           "is_loyalty boolean, is_guest boolean, has_discount boolean, is_test_data boolean, "
-          "item_quantity int, order_revenue decimal(12,2)")
+          "item_quantity int, order_revenue decimal(12,2), discount_amount decimal(12,2)")
 LINES = ("order_id string, lineitem_id string, business_date date, order_hour_local int, restaurant_id string, "
          "item_key string, item_quantity int, line_revenue decimal(12,2), is_test_data boolean")
 ITEMS = "item_key string, item_category string"
@@ -17,14 +17,14 @@ D1, D2 = date(2023, 1, 2), date(2023, 1, 3)
 def orders_df(spark):
     return spark.createDataFrame([
         # two orders in the same day / restaurant / hour: they land in one row
-        ("o1", D1, 9, "r1", True,  False, False, False, 3, Decimal("11.50")),
-        ("o2", D1, 9, "r1", False, True,  True,  False, 1, Decimal("3.50")),
+        ("o1", D1, 9, "r1", True,  False, False, False, 3, Decimal("11.50"), Decimal("0.00")),
+        ("o2", D1, 9, "r1", False, True,  True,  False, 1, Decimal("3.50"), Decimal("-1.50")),
         # a different hour, and a different day
-        ("o3", D1, 10, "r1", False, False, False, False, 2, Decimal("6.00")),
-        ("o4", D2, 9, "r1", True,  False, False, False, 1, Decimal("4.00")),
+        ("o3", D1, 10, "r1", False, False, False, False, 2, Decimal("6.00"), Decimal("0.00")),
+        ("o4", D2, 9, "r1", True,  False, False, False, 1, Decimal("4.00"), Decimal("0.00")),
         # excluded: test data, and a date outside 2023
-        ("o5", D1, 9, "r1", False, False, False, True, 1, Decimal("99.00")),
-        ("o6", date(2022, 12, 31), 9, "r1", False, False, False, False, 1, Decimal("50.00")),
+        ("o5", D1, 9, "r1", False, False, False, True, 1, Decimal("99.00"), Decimal("-5.00")),
+        ("o6", date(2022, 12, 31), 9, "r1", False, False, False, False, 1, Decimal("50.00"), Decimal("0.00")),
     ], ORDERS)
 
 
@@ -52,6 +52,8 @@ def test_sales_daily_groups_orders_and_splits(spark, rules):
     assert busy.orders == 2 and busy.revenue == Decimal("15.00") and busy.item_quantity == 4
     assert busy.loyalty_orders == 1 and busy.loyalty_revenue == Decimal("11.50")
     assert busy.guest_orders == 1 and busy.discounted_orders == 1
+    assert busy.discount_amount == Decimal("-1.50") and busy.discounted_revenue == Decimal("3.50")
+    assert rows[(D1, 10)].discount_amount == Decimal("0.00") and rows[(D1, 10)].discounted_revenue == Decimal("0.00")
     assert rows[(D1, 10)].loyalty_orders == 0 and rows[(D1, 10)].loyalty_revenue == Decimal("0.00")
 
 

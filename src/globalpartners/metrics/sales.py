@@ -39,7 +39,12 @@ def sales_daily(fact_order: DataFrame, rules: dict) -> DataFrame:
                  F.sum(F.when(F.col("is_loyalty"), F.col("order_revenue")).otherwise(0))
                   .cast("decimal(14,2)").alias("loyalty_revenue"),
                  _count_if(F.col("is_guest")).alias("guest_orders"),
-                 _count_if(F.col("has_discount")).alias("discounted_orders")))
+                 _count_if(F.col("has_discount")).alias("discounted_orders"),
+                 # discount_amount is <= 0 (negative option prices); revenue is already net of it,
+                 # so gross revenue (before discounts) = revenue - discount_amount
+                 F.sum("discount_amount").cast("decimal(14,2)").alias("discount_amount"),
+                 F.sum(F.when(F.col("has_discount"), F.col("order_revenue")).otherwise(0))
+                  .cast("decimal(14,2)").alias("discounted_revenue")))
 
 
 def sales_daily_category(fact_order_line: DataFrame, dim_item: DataFrame, rules: dict) -> DataFrame:
