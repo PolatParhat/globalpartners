@@ -1,6 +1,5 @@
 """Page 4: loyalty program impact."""
 import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
 
 from dashboard import data, logic, queries, ui

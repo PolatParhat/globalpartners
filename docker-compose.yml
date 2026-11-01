@@ -115,6 +115,21 @@ services:
       - "18080:18080"
     command: ["-c", "/usr/lib/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer"]
 
+  dashboard:                              # Streamlit dashboard: http://localhost:8501
+    image: globalpartners-spark:5.1.0     # same image as the spark service (it has Streamlit and reads the Iceberg lake with Spark)
+    depends_on:
+      - spark                             # the spark service builds the image first
+    environment:
+      PIPELINE_ENV: local
+      PYTHONPATH: /home/hadoop/workspace/src:/home/hadoop/workspace
+      DASHBOARD_WAREHOUSE: ${DASHBOARD_WAREHOUSE:-}   # empty = your lake/ folder; set it to the full-year demo lake (README, Dashboard)
+    volumes:
+      - .:/home/hadoop/workspace
+    working_dir: /home/hadoop/workspace   # Streamlit reads .streamlit/config.toml from here
+    ports:
+      - "8501:8501"
+    command: ["-c", "streamlit run dashboard/app.py"]
+
 
   # ---------------- NEW: Airflow ----------------
   airflow-db:                             # Airflow's own database (RDS-like Postgres inside MWAA)

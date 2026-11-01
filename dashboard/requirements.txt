@@ -1,0 +1,7 @@
+# The AWS dashboard image (dashboard/Dockerfile). Locally the dashboard runs in the Glue image, which already has
+# pandas, plotly and boto3 at these versions (checked 2026-11-01), plus streamlit from docker/spark/Dockerfile.
+streamlit==1.66.1
+pandas==2.3.3
+plotly==6.4.0
+boto3==1.43.123
+PyYAML==6.0.3

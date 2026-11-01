@@ -47,7 +47,8 @@ def delete_secrets() -> None:
 
 def project_log_groups() -> list[str]:
     logs, found = client("logs"), []
-    prefixes = [f"airflow-{names.MWAA_ENVIRONMENT}-", f"/aws/lambda/{names.DATA_STACK}", f"/aws/lambda/{names.PIPELINE_STACK}"]
+    prefixes = [f"airflow-{names.MWAA_ENVIRONMENT}-", f"/aws/lambda/{names.DATA_STACK}", f"/aws/lambda/{names.PIPELINE_STACK}",
+                names.DASHBOARD_LOG_GROUP]
     if not other_glue_jobs():                    # Glue's log groups are shared by every Glue job in the account
         prefixes.append("/aws-glue/")
     for prefix in prefixes:

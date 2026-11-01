@@ -4,6 +4,8 @@ build/glue/globalpartners.zip   the pipeline package, for the Glue jobs' --extra
 build/glue/jobs/<job>.py        one script per Glue job
 build/glue/files/               config YAMLs + SQL scripts, for --extra-files (land in the job's working dir)
 build/mwaa/dags/                the Airflow DAG
+build/dashboard/                the Docker build context of the dashboard image: Dockerfile, requirements.txt,
+                                .streamlit/ and dashboard/ (nothing else, so no data or lake file can get in)
 """
 import shutil
 import zipfile
@@ -27,6 +29,17 @@ def zip_package(source: Path, target: Path) -> None:
             z.writestr(info, path.read_bytes(), zipfile.ZIP_DEFLATED)
 
 
+def stage_dashboard(target: Path) -> None:
+    """The dashboard image's build context (see dashboard/Dockerfile)."""
+    code = ROOT / "dashboard"
+    target.mkdir(parents=True)
+    shutil.copy(code / "Dockerfile", target / "Dockerfile")
+    shutil.copy(code / "requirements.txt", target / "requirements.txt")
+    shutil.copytree(ROOT / ".streamlit", target / ".streamlit")
+    shutil.copytree(code, target / "dashboard",
+                    ignore=shutil.ignore_patterns("__pycache__", "Dockerfile", "requirements.txt", "*.pyc"))
+
+
 def build(jobs: list[str]) -> dict[str, Path]:
     shutil.rmtree(BUILD, ignore_errors=True)
     glue, mwaa = BUILD / "glue", BUILD / "mwaa"
@@ -40,4 +53,5 @@ def build(jobs: list[str]) -> dict[str, Path]:
         shutil.copy(ROOT / file, glue / "files" / Path(file).name)
 
     shutil.copy(ROOT / "dags" / "globalpartners_daily.py", mwaa / "dags" / "globalpartners_daily.py")
-    return {"glue": glue, "mwaa": mwaa}
+    stage_dashboard(BUILD / "dashboard")
+    return {"glue": glue, "mwaa": mwaa, "dashboard": BUILD / "dashboard"}

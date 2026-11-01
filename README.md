@@ -18,13 +18,36 @@ metric. Built step by step for SME review, to production standard.
 | 1 | Download and verify source files | Done | [Data verification findings](docs/01_data_verification/Step1_Data_Verification_Findings.md) · [integrity report](docs/01_data_verification/integrity_report.json) |
 | 2 | Initial data analysis | Done | [Initial data analysis](docs/02_data_analysis/Step2_Initial_Data_Analysis.md) · [notebook](scripts/step2/data_analysis.ipynb) |
 | 3 | Pipeline architecture and data model | **Approved by the SME (2026-10-14)** | [Solution design](docs/03_architecture/Step3_Solution_Design.md) · [data model](docs/03_architecture/Step3_Data_Model.md) · [architecture diagram](docs/03_architecture/global-partner-pipeline-architecture.png) · [data-model diagram](docs/03_architecture/global-partner-data-model.png) · [cost estimate](docs/03_architecture/cost_estimate.md) · [business rules](config/business_rules.yaml) |
-| 4 | Build the pipeline (local first, then AWS) | **In progress** | |
-| 5 | Metrics: CLV, RFM, churn, sales trends, loyalty, locations, discounts | Not started | |
-| 6 | Streamlit dashboards | Not started | |
-| 7 | Submission, CI/CD, video | Not started | |
+| 4 | Build the pipeline (local first, then AWS) | Built and tested locally; AWS code written ([`infra/`](infra/README.md)), not deployed yet | |
+| 5 | Metrics: CLV, RFM, churn, sales trends, loyalty, locations | **Done** (matches the full-year reference) | [data model, section 10](docs/03_architecture/Step3_Data_Model.md) |
+| 6 | Streamlit dashboards (6 pages) | **Built and tested locally**; the AWS part (Fargate + load balancer) is written, not deployed | [Run the dashboard](#run-the-dashboard) |
+| 7 | Submission, CI/CD, video | CI runs on every push; deployment, video and submission pending | |
 
 Requirements: [`docs/00_requirements/`](docs/00_requirements/GlobalPartners_Business_Analysis_Requirements.docx).
 Decisions and change log: [`docs/decisions.md`](docs/decisions.md) · current state: [`STATUS.md`](STATUS.md) · project rules: [`CLAUDE.md`](CLAUDE.md).
+
+## Run the dashboard
+
+Six pages, one per question in the requirements: customer segmentation (RFM), churn risk, sales trends and
+seasonality, loyalty program impact, location performance, pricing and discounts. The discount page states the
+SME-confirmed data limitation (the source has no discounts).
+
+```bash
+docker compose build spark                 # once: the image now includes Streamlit
+docker compose up -d dashboard             # then open http://localhost:8501
+```
+
+It reads the gold tables of your local lake (`lake/`), which holds the 3 replayed days. For a **full year** of data
+to explore, build a separate demo lake (your own lake and SQL Server are not touched) and point the dashboard at it:
+
+```bash
+docker compose exec spark spark-submit scripts/build_demo_lake.py        # writes lake_demo/ (about 2 minutes)
+DASHBOARD_WAREHOUSE=/home/hadoop/workspace/lake_demo docker compose up -d dashboard
+```
+
+On AWS the same code reads the gold tables through Amazon Athena (Streamlit on ECS Fargate behind a load balancer; see
+[`infra/README.md`](infra/README.md)). Code: [`dashboard/`](dashboard/) (`queries.py` SQL, `logic.py` calculations,
+`views/` the six pages, `data.py` Spark-or-Athena).
 
 ## Repository layout
 

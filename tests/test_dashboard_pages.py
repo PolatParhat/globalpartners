@@ -161,6 +161,16 @@ def test_customer_pages_warn_when_the_day_has_no_customers(monkeypatch, module):
     assert any("No customers" in w.value for w in app.warning)
 
 
+def test_the_app_explains_a_missing_pipeline_run_instead_of_showing_a_stack_trace(monkeypatch):
+    def no_tables(sql):
+        raise RuntimeError("Athena query FAILED: TABLE_NOT_FOUND: gold.customer_daily_snapshot does not exist")
+    monkeypatch.setattr(data, "_execute", no_tables)
+    app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "dashboard" / "app.py"), default_timeout=TIMEOUT).run()
+    assert not app.exception                                              # handled: no raw trace on the page
+    assert any("could not read the gold tables" in e.value for e in app.error)
+    assert any("TABLE_NOT_FOUND" in c.value for c in app.code)
+
+
 def test_the_app_shell_has_six_pages_and_the_as_of_picker():
     app = AppTest.from_file(str(Path(__file__).resolve().parent.parent / "dashboard" / "app.py"), default_timeout=TIMEOUT).run()
     assert not app.exception, [e.value for e in app.exception]

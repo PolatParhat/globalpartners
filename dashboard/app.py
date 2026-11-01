@@ -21,9 +21,21 @@ PAGES = [
     st.Page(discounts.render, title="Pricing and discounts", url_path="discounts", icon=":material/sell:"),
 ]
 
-st.sidebar.markdown("### GlobalPartners")
-current = st.navigation(PAGES)
-ui.as_of_selector()
-st.sidebar.caption(f"2023 orders · data from the gold tables ({'Athena' if data.engine() == 'athena' else 'local Spark'}) · "
-                   "refreshed after each daily pipeline run")
-current.run()
+
+def main() -> None:
+    st.sidebar.markdown("### GlobalPartners")
+    current = st.navigation(PAGES)
+    try:
+        ui.as_of_selector()
+        st.sidebar.caption(f"2023 orders · data from the gold tables ({'Athena' if data.engine() == 'athena' else 'local Spark'}) · "
+                           "refreshed after each daily pipeline run")
+        current.run()
+    except Exception as error:                      # noqa: BLE001  (Streamlit's own stop / rerun signals are not Exceptions)
+        # Typical right after a deployment: the dashboard is up, but the pipeline has not produced the gold tables yet.
+        st.error("The dashboard could not read the gold tables. If the pipeline has not run yet, run the daily DAG "
+                 "in Airflow first (it builds the gold tables), then reload this page.")
+        with st.expander("Technical details"):
+            st.code(f"{type(error).__name__}: {error}")
+
+
+main()
