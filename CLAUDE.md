@@ -24,7 +24,7 @@ data findings, SME Q&A, change log): `docs/decisions.md`; read it before re-deci
 | 2 | Initial data analysis | Done |
 | 3 | Architecture + data model (SME approval) | Done (approved 2026-10-14) |
 | 4 | Build pipeline: local first (4.1–4.8 done), then AWS CDK (4.9 code done, not deployed) | In progress |
-| 5 | Metrics: `customer_daily_snapshot`, `sales_daily`, `sales_daily_category` | Not started |
+| 5 | Metrics: `customer_daily_snapshot`, `sales_daily`, `sales_daily_category` | Code + tests done, matches the full-year reference; on branch `worktree-step-5-metrics`, PR pending |
 | 6 | Streamlit dashboard (adds ECS Fargate + ALB to PipelineStack) | Not started |
 | 7 | Single AWS deployment, verify, record video, delete; submission | Not started |
 
@@ -55,10 +55,10 @@ globalpartners/
 ├── src/globalpartners/
 │   ├── common/                            config, spark, job_args, credentials, source, sqlserver, tables, run_log
 │   ├── transformations/                   pure functions: cleaning, silver_*, gold_facts, gold_dimensions
-│   ├── quality/                           quarantine, checks (19 DQ checks)
+│   ├── quality/                           quarantine, checks (24 DQ checks)
 │   ├── jobs/                              entry points: setup_source, load_seed, replay_day, extract_to_bronze,
-│   │                                      bronze_to_silver, silver_to_gold, dq_checks, smoke_test
-│   └── metrics/                           Step 5
+│   │                                      bronze_to_silver, silver_to_gold, gold_metrics, dq_checks, smoke_test
+│   └── metrics/                           sales, customer_snapshot (pure functions, Step 5)
 ├── dags/globalpartners_daily.py           Airflow DAG (local: docker exec; AWS: GlueJobOperator)
 ├── docker-compose.yml, docker/, airflow/  local stack: sqlserver, spark (Glue 5.1), spark-history, MWAA 3.3.1
 ├── infra/                                 AWS CDK (2 stacks), up.sh, down.sh, cleanup.py, tests (see infra/README.md)

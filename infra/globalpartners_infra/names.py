@@ -14,7 +14,7 @@ TAGS = {"project": PROJECT, "env": "prod"}            # cost allocation + leftov
 GLUE_DATABASES = ["bronze", "silver", "gold", "ops"]  # = the Iceberg namespaces lake.<layer>
 GLUE_JOB_PREFIX = f"{PROJECT}-"
 GLUE_JOBS = ["setup_source", "load_seed", "replay_day",
-             "extract_to_bronze", "bronze_to_silver", "silver_to_gold", "dq_checks"]
+             "extract_to_bronze", "bronze_to_silver", "silver_to_gold", "gold_metrics", "dq_checks"]
 
 ADMIN_SECRET = f"{PROJECT}/rds-admin"                 # RDS master login (setup jobs only)
 READER_SECRET = f"{PROJECT}/rds-etl-reader"           # read-only pipeline login
