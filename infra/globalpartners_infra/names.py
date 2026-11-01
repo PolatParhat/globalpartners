@@ -28,3 +28,11 @@ def lake_bucket(account: str) -> str:
 
 def artifacts_bucket(account: str) -> str:
     return f"{PROJECT}-artifacts-{account}-{REGION}"
+
+# Step 6 dashboard (Streamlit on ECS Fargate behind an Application Load Balancer)
+ATHENA_WORKGROUP = PROJECT                             # created by DataStack; the dashboard queries gold through it
+GOLD_DATABASE = "gold"
+DASHBOARD_CLUSTER = PROJECT
+DASHBOARD_SERVICE = f"{PROJECT}-dashboard"
+DASHBOARD_LOG_GROUP = f"/ecs/{PROJECT}-dashboard"
+DASHBOARD_PORT = 8501

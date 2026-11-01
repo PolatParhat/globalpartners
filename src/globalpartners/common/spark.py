@@ -4,8 +4,10 @@ from pyspark.sql import SparkSession
 ICEBERG_EXTENSIONS = "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions"
 
 
-def build_spark(app_name: str, env: dict) -> SparkSession:
-    """SparkSession with UTC time and the Iceberg catalog for this environment."""
+def build_spark(app_name: str, env: dict, extra_conf: dict | None = None) -> SparkSession:
+    """SparkSession with UTC time and the Iceberg catalog for this environment.
+
+    extra_conf: more Spark settings for one caller (the dashboard uses it to switch off the Hive/Glue default catalog)."""
     catalog = env["catalog"]
     prefix = f"spark.sql.catalog.{catalog['name']}"
     builder = (
@@ -18,6 +20,8 @@ def build_spark(app_name: str, env: dict) -> SparkSession:
     )
     if catalog["type"] == "glue":
         builder = builder.config(f"{prefix}.io-impl", "org.apache.iceberg.aws.s3.S3FileIO")
+    for key, value in (extra_conf or {}).items():
+        builder = builder.config(key, value)
     return builder.getOrCreate()
 
 

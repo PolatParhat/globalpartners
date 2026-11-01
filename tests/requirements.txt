@@ -1,3 +1,7 @@
 pyspark==3.5.6
 PyYAML==6.0.3
 pytest==8.4.2
+# dashboard tests (same versions as the Glue 5.1 image and dashboard/requirements.txt)
+streamlit==1.66.1
+pandas==2.3.3
+plotly==6.4.0

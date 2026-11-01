@@ -365,6 +365,7 @@ store **sums only**; ratios such as average order value are calculated after sum
 |---|---|---|---|
 | `sales_daily` | `business_date` × `restaurant_id` × `order_hour_local` | `fact_order` | `orders`, `revenue`, `item_quantity`, `loyalty_orders`, `loyalty_revenue`, `guest_orders`, `discounted_orders` |
 | `sales_daily_category` | `business_date` × `restaurant_id` × `item_category` | `fact_order_line` | `revenue`, `item_quantity`, `line_count` (no order count) |
+| `location_summary` (added in Step 6) | `restaurant_id`, whole reporting period | `fact_order` | `orders`, `revenue` (sales scope); `customers`, `repeat_customers` (customer rules; a repeat customer has 2+ orders at that restaurant; not additive across restaurants) |
 
 **Scope:** 2023, excluding test data. Guest orders and the non-customer account are included (real sales).
 Weekly and monthly views join to `dim_date` (`iso_year` + `iso_week`, `month`).
@@ -378,6 +379,7 @@ Weekly and monthly views join to `dim_date` (`iso_year` + `iso_week`, `month`).
 | Sales trends (daily/weekly/monthly; by location, category, time of day) | `sales_daily`, `sales_daily_category`, `dim_date` |
 | Loyalty vs non-members | `fact_order`, `customer_daily_snapshot` (`is_loyalty_as_of`) |
 | Top/bottom locations (revenue, average order value, orders per day/week) | `sales_daily`, `dim_location` |
+| Customer retention per location (repeat rate) | `location_summary` |
 | Discount effectiveness | `fact_order` (`has_discount`, `discount_amount`), `sales_daily` (`discounted_orders`) |
 
 **DQ tie-out:** Σ `fact_order.order_revenue` = Σ `fact_order_line.line_revenue` = Σ `sales_daily.revenue`

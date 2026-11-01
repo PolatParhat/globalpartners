@@ -1,19 +1,25 @@
-"""PipelineStack: the parts that run (≈ $0.42/hour while deployed, almost all MWAA).
+"""PipelineStack: the parts that run (≈ $0.42/hour while deployed, mostly MWAA).
 
 - network        VPC in 2 zones: public subnets (NAT gateway) + private subnets (everything else)
 - source         RDS SQL Server Express + 2 logins in Secrets Manager (admin, read-only etl_reader)
 - Glue           one Spark job per pipeline step, running inside the VPC so it can reach RDS
 - MWAA           Airflow 3.3.1, runs the daily DAG, which starts the Glue jobs
 - alerts         a failed Glue job → EventBridge → SNS → email
+- dashboard      Streamlit on ECS Fargate (private subnet) behind an Application Load Balancer; reads gold through Athena
 
 Everything is removed by `cdk destroy` (no final RDS snapshot, no retained resources).
 """
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
 from aws_cdk import aws_ec2 as ec2
+from aws_cdk import aws_ecr_assets as ecr_assets
+from aws_cdk import aws_ecs as ecs
+from aws_cdk import aws_ecs_patterns as ecs_patterns
+from aws_cdk import aws_elasticloadbalancingv2 as elbv2
 from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_glue as glue
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_logs as logs
 from aws_cdk import aws_mwaa as mwaa
 from aws_cdk import aws_rds as rds
 from aws_cdk import aws_s3 as s3
@@ -31,6 +37,7 @@ SQL_SERVER_VERSION = rds.SqlServerEngineVersion.of("16.00.4265.3.v1", "16.00")
 AVAILABILITY_ZONES = ["us-east-1a", "us-east-1b"]
 GLUE_VERSION = "5.1"                                                             # Spark 3.5.6, Python 3.11
 AIRFLOW_VERSION = "3.3.1"                                                        # same as the local MWAA image
+NOBODY = "127.0.0.1/32"                                                          # default for who may open the dashboard: no one (up.sh passes your IP)
 
 
 class PipelineStack(Stack):
@@ -41,7 +48,8 @@ class PipelineStack(Stack):
         return AVAILABILITY_ZONES
 
     def __init__(self, scope: Construct, construct_id: str, *, lake: s3.IBucket, artifacts_bucket: s3.IBucket,
-                 glue_execution_class: str = "STANDARD", alert_email: str | None = None, **kwargs) -> None:
+                 glue_execution_class: str = "STANDARD", alert_email: str | None = None,
+                 dashboard_cidr: str = NOBODY, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
         files = artifacts.build(names.GLUE_JOBS)
 
@@ -245,5 +253,56 @@ class PipelineStack(Stack):
             targets=[targets.SnsTopic(topic)],
         )
 
+        # ---------------- dashboard: Streamlit on ECS Fargate behind an Application Load Balancer ----------------
+        # The task role is read-only on the gold data: it can run Athena queries in our workgroup, read the gold
+        # tables' metadata in the Glue catalog and the gold files in S3, and write Athena's result files. Nothing else.
+        dashboard_role = iam.Role(self, "DashboardRole", assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+                                  description="Streamlit dashboard: reads the gold tables through Athena")
+        dashboard_role.add_to_policy(iam.PolicyStatement(
+            actions=["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults",
+                     "athena:StopQueryExecution", "athena:GetWorkGroup"],
+            resources=[f"arn:aws:athena:{self.region}:{self.account}:workgroup/{names.ATHENA_WORKGROUP}"]))
+        glue_arn = f"arn:aws:glue:{self.region}:{self.account}"
+        dashboard_role.add_to_policy(iam.PolicyStatement(
+            actions=["glue:GetDatabase", "glue:GetTable", "glue:GetTables", "glue:GetPartition", "glue:GetPartitions"],
+            resources=[f"{glue_arn}:catalog", f"{glue_arn}:database/{names.GOLD_DATABASE}",
+                       f"{glue_arn}:table/{names.GOLD_DATABASE}/*"]))
+        lake.grant_read(dashboard_role, f"lake/{names.GOLD_DATABASE}.db/*")   # Iceberg puts a table at <warehouse>/<database>.db/<table>/
+        lake.grant_read(dashboard_role, "athena-results/*")                   # read the result file back
+        lake.grant_put(dashboard_role, "athena-results/*")                    # Athena writes it with our credentials; no delete (and the KMS key)
+
+        cluster = ecs.Cluster(self, "DashboardCluster", cluster_name=names.DASHBOARD_CLUSTER, vpc=vpc)
+        dashboard_logs = logs.LogGroup(self, "DashboardLogs", log_group_name=names.DASHBOARD_LOG_GROUP,
+                                       retention=logs.RetentionDays.ONE_WEEK, removal_policy=RemovalPolicy.DESTROY)
+        dashboard = ecs_patterns.ApplicationLoadBalancedFargateService(
+            self, "Dashboard",
+            cluster=cluster, service_name=names.DASHBOARD_SERVICE,
+            cpu=512, memory_limit_mib=1024, desired_count=1,                  # Streamlit + pandas + plotly: 0.5 GB is too tight
+            min_healthy_percent=100, max_healthy_percent=200,                 # a new version starts before the old one stops
+            runtime_platform=ecs.RuntimePlatform(cpu_architecture=ecs.CpuArchitecture.ARM64,     # cheaper, same as an Apple-silicon Mac
+                                                 operating_system_family=ecs.OperatingSystemFamily.LINUX),
+            task_subnets=private, assign_public_ip=False,                     # the task sits in a private subnet (NAT for the image pull)
+            public_load_balancer=True, listener_port=80, protocol=elbv2.ApplicationProtocol.HTTP,
+            open_listener=False,                                              # who may connect is set below, not "everyone"
+            circuit_breaker=ecs.DeploymentCircuitBreaker(rollback=True),      # a broken image fails the deploy quickly
+            health_check_grace_period=Duration.seconds(90),
+            task_image_options=ecs_patterns.ApplicationLoadBalancedTaskImageOptions(
+                image=ecs.ContainerImage.from_asset(str(files["dashboard"]), platform=ecr_assets.Platform.LINUX_ARM64),
+                container_port=names.DASHBOARD_PORT,
+                task_role=dashboard_role,
+                log_driver=ecs.LogDrivers.aws_logs(stream_prefix="dashboard", log_group=dashboard_logs),
+                environment={"PIPELINE_ENV": "prod", "AWS_REGION": self.region,
+                             "ATHENA_WORKGROUP": names.ATHENA_WORKGROUP},
+            ),
+        )
+        dashboard.target_group.configure_health_check(                       # Streamlit's own health endpoint
+            path="/_stcore/health", healthy_http_codes="200", interval=Duration.seconds(30),
+            healthy_threshold_count=2, unhealthy_threshold_count=3)
+        dashboard.target_group.set_attribute("deregistration_delay.timeout_seconds", "10")   # faster deploys and deletes
+        dashboard.load_balancer.set_attribute("idle_timeout.timeout_seconds", "300")        # Streamlit keeps a websocket open
+        dashboard.load_balancer.connections.allow_from(
+            ec2.Peer.ipv4(dashboard_cidr), ec2.Port.tcp(80), "Who may open the dashboard (up.sh passes your IP)")
+
+        CfnOutput(self, "DashboardUrl", value=f"http://{dashboard.load_balancer.load_balancer_dns_name}")
         CfnOutput(self, "AirflowUi", value=f"https://{self.region}.console.aws.amazon.com/mwaa/home?region={self.region}#environments/{names.MWAA_ENVIRONMENT}")
         CfnOutput(self, "SourceDbEndpoint", value=database.db_instance_endpoint_address)

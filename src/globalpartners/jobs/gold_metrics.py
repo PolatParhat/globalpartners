@@ -3,6 +3,7 @@
     gold.sales_daily            date x restaurant x hour       (from fact_order)
     gold.sales_daily_category   date x restaurant x category   (from fact_order_line + dim_item)
     gold.customer_daily_snapshot  customer x day: CLV, tier, RFM, churn   (from fact_order)
+    gold.location_summary       one row per restaurant: orders, revenue, customers, repeat customers (from fact_order)
 
 Rebuilding is cheap at this size and lets late data correct past days (decision 2026-10-09).
 """
@@ -14,7 +15,7 @@ from globalpartners.common.config import load_business_rules, load_environment
 from globalpartners.common.job_args import parse_job_args
 from globalpartners.common.run_log import logged_run
 from globalpartners.common.spark import build_spark
-from globalpartners.metrics import customer_snapshot, sales
+from globalpartners.metrics import customer_snapshot, location, sales
 
 
 def main() -> None:
@@ -43,6 +44,10 @@ def main() -> None:
         by_category.writeTo(f"{lake}.gold.sales_daily_category").using("iceberg").createOrReplace()
         print(f"gold.sales_daily: {spark.table(f'{lake}.gold.sales_daily').count():,} rows | "
               f"gold.sales_daily_category: {spark.table(f'{lake}.gold.sales_daily_category').count():,} rows")
+
+        by_location = location.location_summary(fact_order, rules)
+        by_location.writeTo(f"{lake}.gold.location_summary").using("iceberg").createOrReplace()
+        print(f"gold.location_summary: {spark.table(f'{lake}.gold.location_summary').count():,} rows")
 
         snapshot = customer_snapshot.customer_daily_snapshot(fact_order, rules, batch_id)
         (snapshot.writeTo(f"{lake}.gold.customer_daily_snapshot").using("iceberg")

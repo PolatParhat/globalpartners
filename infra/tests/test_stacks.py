@@ -147,3 +147,89 @@ def test_package_zip_is_identical_when_nothing_changed(tmp_path):
     artifacts.zip_package(artifacts.ROOT / "src" / "globalpartners", a)
     artifacts.zip_package(artifacts.ROOT / "src" / "globalpartners", b)
     assert a.read_bytes() == b.read_bytes()
+
+
+# ---------------------------------------------------------------- Step 6: dashboard (Streamlit on Fargate behind an ALB)
+def test_dashboard_runs_one_arm_task_in_a_private_subnet_without_a_public_ip(pipeline):
+    pipeline.has_resource_properties("AWS::ECS::Service", {
+        "ServiceName": names.DASHBOARD_SERVICE,
+        "LaunchType": "FARGATE",
+        "DesiredCount": 1,
+        "NetworkConfiguration": {"AwsvpcConfiguration": Match.object_like({"AssignPublicIp": "DISABLED"})},
+        "DeploymentConfiguration": Match.object_like({"DeploymentCircuitBreaker": {"Enable": True, "Rollback": True},
+                                                      "MinimumHealthyPercent": 100}),
+    })
+    pipeline.has_resource_properties("AWS::ECS::TaskDefinition", {
+        "Cpu": "512", "Memory": "1024",
+        "RuntimePlatform": {"CpuArchitecture": "ARM64", "OperatingSystemFamily": "LINUX"},
+        "ContainerDefinitions": [Match.object_like({
+            "PortMappings": [Match.object_like({"ContainerPort": names.DASHBOARD_PORT})],
+            "Environment": Match.array_with([{"Name": "PIPELINE_ENV", "Value": "prod"},
+                                             {"Name": "ATHENA_WORKGROUP", "Value": names.ATHENA_WORKGROUP}]),
+            "LogConfiguration": Match.object_like({"LogDriver": "awslogs"}),
+        })],
+    })
+
+
+def test_load_balancer_checks_streamlits_health_endpoint(pipeline):
+    pipeline.has_resource_properties("AWS::ElasticLoadBalancingV2::LoadBalancer", {"Scheme": "internet-facing"})
+    pipeline.has_resource_properties("AWS::ElasticLoadBalancingV2::TargetGroup", {
+        "HealthCheckPath": "/_stcore/health", "TargetType": "ip", "Matcher": {"HttpCode": "200"}})
+    pipeline.has_resource_properties("AWS::ElasticLoadBalancingV2::Listener", {"Port": 80, "Protocol": "HTTP"})
+
+
+def test_only_the_allowed_address_can_open_the_dashboard(pipeline):
+    """By default nobody (127.0.0.1/32); the world (0.0.0.0/0) must never be the default."""
+    load_balancer_sg = [r for r in pipeline.find_resources("AWS::EC2::SecurityGroup").values()
+                        if "Who may open the dashboard" in str(r["Properties"].get("SecurityGroupIngress"))]
+    assert len(load_balancer_sg) == 1
+    ingress = load_balancer_sg[0]["Properties"]["SecurityGroupIngress"]
+    assert [(rule["CidrIp"], rule["FromPort"], rule["ToPort"]) for rule in ingress] == [("127.0.0.1/32", 80, 80)]
+
+
+def test_dashboard_address_can_be_set():
+    from aws_cdk import App
+    from globalpartners_infra.data_stack import DataStack
+    from globalpartners_infra.pipeline_stack import PipelineStack
+    app = App()
+    data_stack = DataStack(app, "D")
+    stack = PipelineStack(app, "P", lake=data_stack.lake, artifacts_bucket=data_stack.artifacts, dashboard_cidr="203.0.113.7/32")
+    Template.from_stack(stack).has_resource_properties("AWS::EC2::SecurityGroup", {
+        "SecurityGroupIngress": [Match.object_like({"CidrIp": "203.0.113.7/32", "FromPort": 80})]})
+
+
+def test_dashboard_role_is_read_only_on_the_gold_data_and_cannot_touch_the_rest(pipeline):
+    """No wildcard actions; Athena only in our workgroup; Glue only for the gold database; S3 only gold files + Athena results."""
+    role_policies = [r for r in pipeline.find_resources("AWS::IAM::Policy").values()
+                     if "DashboardRole" in str(r["Properties"]["Roles"])]
+    assert len(role_policies) == 1
+    statements = role_policies[0]["Properties"]["PolicyDocument"]["Statement"]
+    text = str(statements)
+    assert "gold.db/*" in text and "athena-results/*" in text
+    for forbidden in ("silver", "bronze", "ops.db", "rds", "secretsmanager", "glue:Create", "glue:Delete", "glue:Update", "s3:DeleteObject"):
+        assert forbidden not in text, forbidden
+    for statement in statements:
+        actions = statement["Action"] if isinstance(statement["Action"], list) else [statement["Action"]]
+        assert not any(action == "*" or action.endswith(":*") for action in actions), actions
+    athena = [s for s in statements if "athena:StartQueryExecution" in s["Action"]][0]
+    assert athena["Resource"] == f"arn:aws:athena:{names.REGION}:123456789012:workgroup/{names.ATHENA_WORKGROUP}"
+
+
+def test_dashboard_logs_are_kept_one_week_and_deleted_with_the_stack(pipeline):
+    pipeline.has_resource_properties("AWS::Logs::LogGroup", {"LogGroupName": names.DASHBOARD_LOG_GROUP, "RetentionInDays": 7})
+
+
+def test_dashboard_url_is_an_output(pipeline):
+    assert "DashboardUrl" in pipeline.to_json()["Outputs"]
+
+
+def test_dashboard_build_context_has_only_the_files_the_image_needs():
+    files = artifacts.build(names.GLUE_JOBS)
+    context = files["dashboard"]
+    assert (context / "Dockerfile").exists() and (context / "requirements.txt").exists()
+    assert (context / ".streamlit" / "config.toml").exists() and (context / "dashboard" / "app.py").exists()
+    assert (context / "dashboard" / "views" / "segmentation.py").exists()
+    assert not (context / "dashboard" / "Dockerfile").exists()
+    names_in_context = {p.name for p in context.rglob("*")}
+    assert not names_in_context & {"lake", "lake_demo", "raw", "data", "__pycache__", ".env", "order_items.csv"}
+    assert sum(p.stat().st_size for p in context.rglob("*") if p.is_file()) < 1_000_000      # code only: well under 1 MB

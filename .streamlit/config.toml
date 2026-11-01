@@ -1,0 +1,17 @@
+# Streamlit settings for the dashboard (read from the folder where `streamlit run` starts: the project root,
+# or /app in the AWS image).
+[server]
+headless = true                 # never try to open a browser (we run in a container)
+address = "0.0.0.0"             # reachable from outside the container
+port = 8501
+fileWatcherType = "none"        # no source-file watching: faster start, nothing to watch in the AWS image
+
+[browser]
+gatherUsageStats = false        # no telemetry
+
+[theme]
+base = "light"                  # the chart palette is validated for a light surface
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f3f2ee"
+textColor = "#0b0b0b"

@@ -5,13 +5,20 @@
 #   infra/up.sh you@example.com     same, and email an alert when a Glue job fails
 #
 # Costs ≈ $0.42 per hour from now on, until infra/down.sh has finished.
+# Needs Docker running (cdk deploy builds the dashboard image) and internet (to find your public IP:
+# only that address may open the dashboard).
 set -euo pipefail
 cd "$(dirname "$0")"
 export AWS_REGION=us-east-1 AWS_DEFAULT_REGION=us-east-1
 
+docker info >/dev/null 2>&1 || { echo "Docker is not running: start Docker Desktop first (cdk deploy builds the dashboard image)."; exit 1; }
+MY_IP=$(curl -fsS https://checkip.amazonaws.com | tr -d '[:space:]')
+[[ "$MY_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Could not find your public IP address (got '$MY_IP')."; exit 1; }
+
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 echo "This creates the GlobalPartners pipeline in AWS account $ACCOUNT, region $AWS_REGION."
 echo "It costs about \$0.42 per hour until infra/down.sh has finished."
+echo "The dashboard will only open from your current IP address ($MY_IP)."
 read -r -p "Type the account id to continue: " answer
 [ "$answer" = "$ACCOUNT" ] || { echo "Cancelled, nothing was created."; exit 1; }
 
@@ -28,7 +35,7 @@ echo; echo "== 2/5 CDK bootstrap (only creates something the first time)"
 cdk bootstrap "aws://$ACCOUNT/$AWS_REGION"
 
 echo; echo "== 3/5 Deploy DataStack + PipelineStack (about 45 minutes; MWAA takes the longest)"
-cdk deploy --all ${1:+--context alert_email=$1} --outputs-file outputs.json
+cdk deploy --all --context "dashboard_cidr=$MY_IP/32" ${1:+--context alert_email=$1} --outputs-file outputs.json
 
 echo; echo "== 4/5 Seed CSVs → S3"
 LAKE=$(python -c "from globalpartners_infra import names; print(names.lake_bucket('$ACCOUNT'))")
@@ -39,7 +46,9 @@ python run_glue_job.py setup_source
 python run_glue_job.py load_seed
 
 echo
+DASHBOARD=$(python -c "import json; print(json.load(open('outputs.json'))['GlobalPartnersPipeline']['DashboardUrl'])")
 echo "Ready. Next:"
+echo "  - Dashboard: $DASHBOARD   (only from $MY_IP; it shows data after the first DAG run; if your IP changes: rerun cdk deploy with a new dashboard_cidr)"
 echo "  - Airflow:  open the link 'AirflowUi' in infra/outputs.json → Open Airflow UI → trigger globalpartners_daily"
 echo "  - by hand:  python run_glue_job.py replay_day --date 2023-01-01   (from infra/, after: source .venv/bin/activate)"
 echo "  - when done: infra/down.sh   (stops all costs)"
