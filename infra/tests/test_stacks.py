@@ -109,6 +109,15 @@ def test_airflow_is_the_micro_class_on_the_local_version(pipeline):
     })
 
 
+def test_every_airflow_log_module_has_a_log_level(pipeline):
+    # MWAA rejects a module without LogLevel, even a disabled one (first deploy failed on this).
+    env = next(iter(pipeline.find_resources("AWS::MWAA::Environment").values()))
+    modules = env["Properties"]["LoggingConfiguration"]
+    assert set(modules) == {"TaskLogs", "SchedulerLogs", "DagProcessingLogs", "WebserverLogs", "WorkerLogs"}
+    for name, module in modules.items():
+        assert module.get("LogLevel") in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}, name
+
+
 def test_failed_glue_jobs_send_an_alert(pipeline):
     pipeline.has_resource_properties("AWS::Events::Rule", {
         "EventPattern": Match.object_like({"source": ["aws.glue"],

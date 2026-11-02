@@ -234,8 +234,9 @@ class PipelineStack(Stack):
                 task_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="INFO"),
                 scheduler_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="WARNING"),
                 dag_processing_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=True, log_level="WARNING"),
-                webserver_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=False),
-                worker_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=False),
+                # The MWAA API rejects a module without a log level, even when the module is switched off.
+                webserver_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=False, log_level="WARNING"),
+                worker_logs=mwaa.CfnEnvironment.ModuleLoggingConfigurationProperty(enabled=False, log_level="WARNING"),
             ),
         )
         environment.node.add_dependency(dag_files, mwaa_role)
