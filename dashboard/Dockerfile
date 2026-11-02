@@ -9,7 +9,10 @@ FROM public.ecr.aws/docker/library/python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIPELINE_ENV=prod
+    PIPELINE_ENV=prod \
+    PYTHONPATH=/app
+# PYTHONPATH: `streamlit run dashboard/app.py` puts only /app/dashboard on the import path, so
+# `from dashboard import data` would fail with ModuleNotFoundError without /app here.
 
 WORKDIR /app
 COPY requirements.txt .
