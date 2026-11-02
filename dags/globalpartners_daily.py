@@ -11,7 +11,7 @@ same name (globalpartners-<step>, created by the CDK PipelineStack) and waits fo
 import os
 from datetime import datetime, timedelta
 
-from airflow.sdk import dag, task
+from airflow.sdk import Param, dag, task
 
 PIPELINE_ENV = os.environ.get("PIPELINE_ENV") or os.environ.get("AIRFLOW__GLOBALPARTNERS__PIPELINE_ENV", "local")
 SPARK_CONTAINER = os.environ.get("SPARK_CONTAINER", "globalpartners-spark-1")
@@ -40,14 +40,19 @@ def run_in_container(container: str, command: list[str]) -> None:
     catchup=False,                              # past days are loaded on purpose (backfill), never by accident
     max_active_runs=1,                          # one business day at a time, in order
     default_args={"retries": 2, "retry_delay": timedelta(minutes=2)},
+    # Optional run setting ("Trigger DAG w/ config"): replay a range of days in ONE run, from the run's date
+    # up to replay_until (YYYY-MM-DD). Empty = the normal single day. Used to load the demo year in one go.
+    params={"replay_until": Param(None, type=["null", "string"], pattern=r"^(\d{4}-\d{2}-\d{2})?$",
+                                  description="Last day to replay, YYYY-MM-DD (empty = only the run's day)")},
     tags=["globalpartners"],
 )
 def globalpartners_daily():
 
     @task
-    def replay_day(ds=None):
-        """Simulate the shops: copy the business day's orders into SQL Server's live tables."""
-        sql = f"EXEC seed.replay_days '{ds}'"
+    def replay_day(ds=None, params=None):
+        """Simulate the shops: copy the business day's orders (or the range up to replay_until) into SQL Server's live tables."""
+        until = (params or {}).get("replay_until") or ds
+        sql = f"EXEC seed.replay_days '{ds}', '{until}'"
         run_in_container(SQLSERVER_CONTAINER, [
             "sh", "-c",
             f'/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d globalpartners -b -W -Q "{sql}"',
@@ -73,7 +78,7 @@ def globalpartners_daily():
     if PIPELINE_ENV == "local":
         steps = [replay_day()] + [spark_job(job) for job in SPARK_JOBS]
     else:
-        steps = ([glue_job("replay_day", {"--date": "{{ ds }}"})]
+        steps = ([glue_job("replay_day", {"--date": "{{ ds }}", "--to-date": "{{ params.replay_until or ds }}"})]
                  + [glue_job(job, {"--batch-id": "{{ run_id }}"}) for job in SPARK_JOBS])
     for upstream, downstream in zip(steps, steps[1:]):
         upstream >> downstream
