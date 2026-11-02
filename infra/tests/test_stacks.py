@@ -1,5 +1,6 @@
 """Infrastructure rules, checked on the synthesized CloudFormation templates (nothing is deployed)."""
 import zipfile
+from pathlib import Path
 
 import pytest
 from aws_cdk.assertions import Match, Template
@@ -116,6 +117,13 @@ def test_every_airflow_log_module_has_a_log_level(pipeline):
     assert set(modules) == {"TaskLogs", "SchedulerLogs", "DagProcessingLogs", "WebserverLogs", "WorkerLogs"}
     for name, module in modules.items():
         assert module.get("LogLevel") in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}, name
+
+
+def test_dashboard_image_can_import_its_own_package():
+    # streamlit run dashboard/app.py only adds /app/dashboard to the path; without PYTHONPATH=/app the
+    # page dies with "No module named 'dashboard'" (first deploy).
+    dockerfile = (Path(__file__).resolve().parents[2] / "dashboard" / "Dockerfile").read_text()
+    assert "PYTHONPATH=/app" in dockerfile
 
 
 def test_failed_glue_jobs_send_an_alert(pipeline):
