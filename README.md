@@ -18,10 +18,10 @@ metric. Built step by step for SME review, to production standard.
 | 1 | Download and verify source files | Done | [Data verification findings](docs/01_data_verification/Step1_Data_Verification_Findings.md) · [integrity report](docs/01_data_verification/integrity_report.json) |
 | 2 | Initial data analysis | Done | [Initial data analysis](docs/02_data_analysis/Step2_Initial_Data_Analysis.md) · [notebook](scripts/step2/data_analysis.ipynb) |
 | 3 | Pipeline architecture and data model | **Approved by the SME (2026-10-14)** | [Solution design](docs/03_architecture/Step3_Solution_Design.md) · [data model](docs/03_architecture/Step3_Data_Model.md) · [architecture diagram](docs/03_architecture/global-partner-pipeline-architecture.png) · [data-model diagram](docs/03_architecture/global-partner-data-model.png) · [cost estimate](docs/03_architecture/cost_estimate.md) · [business rules](config/business_rules.yaml) |
-| 4 | Build the pipeline (local first, then AWS) | Built and tested locally; AWS code written ([`infra/`](infra/README.md)), not deployed yet | |
+| 4 | Build the pipeline (local first, then AWS) | **Done.** Built and tested locally, then deployed once to AWS ([`infra/`](infra/README.md)), run for all of 2023, and deleted | [Video script](docs/04_video/Video_Speaker_Notes.md) |
 | 5 | Metrics: CLV, RFM, churn, sales trends, loyalty, locations | **Done** (matches the full-year reference) | [data model, section 10](docs/03_architecture/Step3_Data_Model.md) |
-| 6 | Streamlit dashboards (6 pages) | **Built and tested locally**; the AWS part (Fargate + load balancer) is written, not deployed | [Run the dashboard](#run-the-dashboard) |
-| 7 | Submission, CI/CD, video | CI runs on every push; deployment, video and submission pending | |
+| 6 | Streamlit dashboards (6 pages) | **Done.** Ran on AWS (Fargate + load balancer, HTTP limited to one IP) and locally | [Run the dashboard](#run-the-dashboard) |
+| 7 | Submission, CI/CD, video | CI runs on every push; AWS deployment verified (all 2023, 25/25 checks, numbers match the reference) and deleted; video recorded | [Tutorial](TUTORIAL.md) |
 
 Requirements: [`docs/00_requirements/`](docs/00_requirements/GlobalPartners_Business_Analysis_Requirements.docx).
 Decisions and change log: [`docs/decisions.md`](docs/decisions.md) · current state: [`STATUS.md`](STATUS.md) · project rules: [`CLAUDE.md`](CLAUDE.md).

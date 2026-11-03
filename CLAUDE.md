@@ -23,10 +23,10 @@ data findings, SME Q&A, change log): `docs/decisions.md`; read it before re-deci
 | 1 | Download and verify source files | Done |
 | 2 | Initial data analysis | Done |
 | 3 | Architecture + data model (SME approval) | Done (approved 2026-10-14) |
-| 4 | Build pipeline: local first (4.1–4.8 done), then AWS CDK (4.9 code done, not deployed) | In progress |
+| 4 | Build pipeline: local first (4.1–4.8), then AWS CDK (4.9) | Done; deployed once to AWS and deleted (2026-11-02) |
 | 5 | Metrics: `customer_daily_snapshot`, `sales_daily`, `sales_daily_category`, `location_summary` | Done (PR #4 merged; `location_summary` added in Step 6); matches the full-year reference |
-| 6 | Streamlit dashboard (6 pages) + ECS Fargate + ALB in PipelineStack | Code + tests done on branch `worktree-step-6-dashboard`, PR pending; works locally against a full-year demo lake; the AWS part is written, not deployed |
-| 7 | Single AWS deployment, verify, record video, delete; submission | Not started |
+| 6 | Streamlit dashboard (6 pages) + ECS Fargate + ALB in PipelineStack | Done (merged); ran on AWS with all of 2023 |
+| 7 | Single AWS deployment, verify, record video, delete; submission | Deployed, verified, video recorded, stack deleted; submission is the user's. Next: `TUTORIAL.md` (code frozen, bug fixes only) |
 
 ## Key facts (a fresh session must not get these wrong)
 
