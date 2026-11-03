@@ -1,5 +1,5 @@
 # Status: GlobalPartners Business Insights Pipeline
-Updated: 2026-11-03 by Claude (project closed: deployed, verified, video recorded, AWS deleted; tutorial started)
+Updated: 2026-11-03 by Claude (project closed: deployed, verified, video recorded, AWS deleted; project concluded; all 41 tutorial chapters written)
 
 ## Where we are
 **The project is built, deployed once to AWS, verified and deleted.** All steps 1–7 are merged to main. On 2026-11-02 the full year 2023
@@ -8,7 +8,10 @@ to the cent (52,015 orders, $746,223.86, 10,512 customers, CLV $673,614.04, snap
 recorded (script: `docs/04_video/Video_Speaker_Notes.md`). `infra/down.sh` ran on 2026-11-03: no stacks, database, NAT gateway, load balancer
 or Airflow environment remain (checked); the KMS key is pending deletion (7 days, free). Estimated cost ≈ $9–10; confirm in Cost Explorer.
 Details and the three bugs found in the real deployment: `docs/decisions.md` (2026-11-02 and 2026-11-03).
-**Current phase: the tutorial** (`TUTORIAL.md`; chapter A1 Bash is ready in `tutorial/A01_bash/`). Code is frozen: bug fixes only.
+**The project is concluded.** The tutorial is fully written (PRs #15 and #18, merged): `TUTORIAL.md` links 41 chapters in `tutorial/`
+(Part A 16 concepts/tools chapters incl. the Spark interview chapter A7, Part B 15 rebuild stages, Part C 10 hardening chapters).
+The user starts it later. Tested: Bash exercises, Spark chapter code (Glue 5.1 image), B1–B3 code and numbers; the rest is written from the repo and
+not run (a failing command means the chapter needs fixing). Code is frozen: bug fixes only.
 
 ## Step 6 in one paragraph
 `dashboard/` (Streamlit 1.66.1): 6 pages (segmentation/RFM, churn risk with a threshold alert list, sales trends + holidays +
@@ -27,7 +30,8 @@ SME-confirmed limitation (no discounts in the data). Details and reasons: `docs/
 
 ## Next actions
 1. User: Cost Explorer check (the bill lags many hours); merge this PR; edit the SME design document if they want it to say HTTP (it still says HTTPS).
-2. Tutorial, one chapter per session: start with A1 (`bash tutorial/A01_bash/make_sandbox.sh`, then `tutorial/A01_bash/README.md` and `exercises.md`).
+2. Tutorial, when the user is ready: for an interview start with A7 (Spark), A3, A5, A8, A10, A11; otherwise A1 first
+   (`bash tutorial/A01_bash/make_sandbox.sh`, then `tutorial/A01_bash/README.md`). Fix any chapter whose command fails.
    Order and checklist: `TUTORIAL.md` (Part A concepts and tools, Part B rebuild by hand, Part C the ten production-hardening items).
 3. Resume bullets after Part C: what was built and deployed (a demo deployment built to production standard), described accurately.
 
