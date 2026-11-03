@@ -1,8 +1,11 @@
-# Video speaker notes: GlobalPartners Business Insights Pipeline
+# Video speaker notes: GlobalPartners Business Insights Pipeline (final)
 
-Audience: the SME. Target length: **12 to 15 minutes**. Record in one take per section; you can cut between sections.
-These notes are written in plain words on purpose: read them once end to end and you understand the whole project.
-Lines in **bold quotes** are what to say (in your own words); the rest is background for you.
+Audience: the SME. Target length: **12 to 15 minutes**. Record one section at a time; you can cut between sections.
+Written in plain words on purpose: read it once end to end and you understand the whole project.
+Lines after **Say:** are what to tell the SME (in your own words); the rest is background for you.
+
+**State of the demo (2 November 2026):** the whole of 2023 is loaded on AWS **through the real Airflow pipeline**, all 25 data-quality checks
+pass, the numbers match the local reference **to the cent**, and all six dashboard pages work.
 
 ---
 
@@ -12,17 +15,13 @@ Lines in **bold quotes** are what to say (in your own words); the rest is backgr
 
 | Check | How |
 |---|---|
-| Dashboard opens on your recording browser | the link printed by `up.sh` (HTTP, not HTTPS); only your IP can open it |
+| Dashboard opens in the recording browser, on the 31 December date | the link printed by `up.sh` (HTTP, not HTTPS); only your IP can open it |
 | Airflow UI open | AWS console → MWAA → globalpartners → Open Airflow UI |
-| The DAG shows 3 green runs (1, 2, 3 January 2023) | Airflow → `globalpartners_daily` → Runs |
-| Four browser tabs ready, in this order | 1 architecture diagram (`docs/03_architecture/global-partner-pipeline-architecture.png`), 2 Airflow, 3 dashboard, 4 AWS console (CloudFormation → GlobalPartnersPipeline → Resources) |
+| Airflow shows the green runs | `globalpartners_daily` → Runs (explained in section 4) |
+| Four browser tabs, in this order | 1 architecture diagram (`docs/03_architecture/global-partner-pipeline-architecture.png`), 2 Airflow, 3 dashboard, 4 AWS console (CloudFormation → GlobalPartnersPipeline → Resources) |
 | Hide private things | do not show the account number, your IP address or your email. Crop or blur the top-right of the AWS console |
 | Zoom the browser to 125 % | readable on a recording |
 | Close notifications | Slack, mail, calendar |
-
-**One honest warning to keep in mind while speaking:** the AWS demo has only **3 days of data** (1 to 3 January 2023), so charts are small.
-The **full-year figures** (52,015 orders, 10,512 customers, and so on) come from the local run on the whole of 2023.
-Always say which of the two you are quoting.
 
 ---
 
@@ -52,7 +51,7 @@ Rules that shape every number (all live in one file, `config/business_rules.yaml
 
 | Rule | In plain words |
 |---|---|
-| Test data excluded | the app `Alltown Fresh - DEVELOPMENT` is test traffic (SME confirmed) |
+| Test data excluded | the app `Alltown Fresh - DEVELOPMENT` is test traffic (SME confirmed). It is loaded but removed at the metrics layer: this is why 52,641 orders are loaded and 52,015 are counted |
 | Guests | orders without a customer id count in **sales**, not in **customer** metrics (SME confirmed) |
 | One faulty account | account `5ece77fe…` (937 orders) is not a real customer; excluded from customer metrics, its revenue stays in sales (assumption Q11a) |
 | Revenue per line | `item_price` (already the line total) + each option's price × quantity (assumption Q3) |
@@ -98,7 +97,7 @@ Components in one line each:
 
 ---
 
-## 4. One day of the pipeline, then the live demo (about 3 minutes)
+## 4. One day of the pipeline, how the year was loaded, and the live demo (about 3.5 minutes)
 
 **Say, in plain words:** "Every morning at 06:00 Airflow starts one run. A run is six steps."
 
@@ -114,31 +113,49 @@ Components in one line each:
 **Why "watermark + 3 days":** the watermark remembers the newest order we loaded. It only moves forward after a **successful** run, so a failed run is
 automatically re-read next time. MERGE writes mean re-reading never creates duplicates. That is the **failure reload mechanism** the requirements ask for.
 
+### How the full year got into the system
+
+**Say:** "A real business adds one day at a time. To fill a whole year for the demo, I ran the same Airflow pipeline several times.
+First three single days, to prove daily behaviour. Then I added one run setting, `replay_until`, so a single run can replay a range of days
+and then run the same six tasks once over everything it received. It is optional: left empty, a run does one day exactly as before."
+
+| Airflow run | Days replayed | Orders added |
+|---|---|---|
+| 1 | 1 Jan 2023 | 63 |
+| 2 | 2 Jan 2023 | 96 |
+| 3 | 3 Jan 2023 | 130 |
+| 4 | 4 to 31 Jan | 3,661 |
+| 5 | 1 Feb to 31 May | 18,831 |
+| 6 | 1 Jun to 31 Dec | 29,860 |
+| **Total loaded** | the whole year | **52,641** (52,015 counted after removing the test app) |
+
+The first three days give the same counts locally and on AWS: **63 / 120 / 105**, **96 / 159 / 173**, **130 / 184 / 151** (orders / lines / options).
+
 ### Live demo steps (tab 4, then tab 2)
 
 1. **AWS console, CloudFormation:** "Everything you see here was created from code by one command." Show the resource list (VPC, RDS, Glue jobs, MWAA, ECS service, load balancer).
-2. **Airflow, Graph view of `globalpartners_daily`:** show the six tasks and three green runs. Click one run, open a task log (for example `replay_day`).
-3. **Read the numbers from the logs** (these are exact and match the local reference):
+2. **Airflow, Graph view of `globalpartners_daily`:** show the six tasks and the green runs. Click a run, open a task log (for example `replay_day`, which prints `replayed … orders, … lines, … options added`).
+3. **Trigger form (optional, 20 seconds):** click Trigger DAG w/ config and point at the `replay_until` field: "this is the run setting I added to load the year."
 
-| Day | Orders | Lines | Options |
+**The proof (say this slowly):** "I did not trust the load, so I counted the result in Athena and compared with the reference I computed from the raw files:"
+
+| Figure | AWS (Athena) | Reference | Match |
 |---|---|---|---|
-| 1 Jan 2023 | 63 | 120 | 105 |
-| 2 Jan 2023 | 96 | 159 | 173 |
-| 3 Jan 2023 | 130 | 184 | 151 |
+| Orders in scope | 52,015 | 52,015 | yes |
+| Revenue | $746,223.86 | $746,223.86 | yes |
+| Customers | 10,512 | 10,512 | yes |
+| Total CLV at 31 Dec | $673,614.04 | $673,614.04 | yes |
+| Snapshot rows (customer × day) | 2,283,740 | 2,283,740 | yes |
+| Locations | 20 | 20 | yes |
 
-   **Say:** "The same three days give exactly the same numbers locally and on AWS. That is the proof that the code behaves the same in both places."
-
-4. **The red run (optional but a strong story):** Airflow may also show a red run dated **today (2 November 2026)**. Explain it:
-   "When I switched the DAG on, Airflow started a run for today. The data only covers 2023, so there were no orders, and the data-quality step **correctly failed the run**.
-   An empty load is exactly what that safety check exists to catch." Then: "In production this would send an alert email through SNS."
-   (If you do not see it, skip it.)
+"Same code, same numbers, to the cent, locally and on AWS. And the 25 checks pass on that run."
 
 ---
 
 ## 5. The dashboard (about 3 minutes)
 
-Show tab 3. Six pages, one per business question in the requirements. In the AWS demo only 3 days exist, so use the **sidebar "as of" date** to show
-the numbers moving between 1, 2 and 3 January.
+Show tab 3. Six pages, one per business question in the requirements. The sidebar **"as of" date** picks the day the customer pages describe;
+it defaults to the last day (31 December). Move it to an earlier date once to show that the customer view changes over time.
 
 **Say first:** "The dashboard reads the gold tables through Athena. It cannot change anything: its AWS role is read-only."
 
@@ -155,19 +172,18 @@ the numbers moving between 1, 2 and 3 January.
 **M**onetary (how much they spent in 90 days). VIP = high on all three. Churn Risk = low recency and low frequency. New = recent, few orders, first order within 90 days.
 Fixed score bands are used (not equal-sized groups) because 82.5 % of customers have 0 or 1 orders in any 90-day window, and fixed bands mean a score means the same thing every day.
 
-**Full-year figures to quote (from the local full-year run, say so):**
+**Figures at 31 December 2023** (read them from the screen while you speak; these are the values to expect):
 
 | Figure | Value |
 |---|---|
-| Customers / total CLV at 31 Dec 2023 | 10,512 / $673,614.04 |
-| Snapshot rows (customer × day) | 2,283,740 |
-| Segments at 31 Dec 2023 | Churn Risk 7,693 · Regular 1,661 · VIP 755 · New 403 |
-| Churn status at 31 Dec 2023 (active / at risk / lapsed) | 2,409 / 1,553 / 6,550 *(check the order on the page before saying it)* |
+| Customers / total CLV | 10,512 / $673,614.04 |
+| Segments | Churn Risk 7,693 · Regular 1,661 · VIP 755 · New 403 |
+| Churn status (three groups: 2,409 / 1,553 / 6,550) | read the labels on the page before you name which is which |
 | Loyalty members | 4,985 (47 %), average CLV $93.12, repeat-order rate 67 % vs 37 % for non-members |
 
 **Say about loyalty:** "Members spend more and come back more, but this shows **association, not proof** that the program causes it."
 
-**Do not claim** anything you cannot see on screen. If a page shows an error, do not record it: tell me and we fix it first.
+**Say about location names:** "Locations are shown by id because the source has no names (SME confirmed)."
 
 ---
 
@@ -182,6 +198,7 @@ Show `docs/03_architecture/global-partner-data-model.png` (or describe).
 
 **The key table, `customer_daily_snapshot`:** one row per customer per day, from the first order to the last loaded day, **including days without orders**,
 because recency and churn status change on those days. Each row holds CLV to date, CLV tier, RFM scores and segment, churn status and loyalty status.
+For 2023 it has **2,283,740 rows**.
 
 **Say, with the real example from the design document:** "One real customer: 8 May, $12.99, New, active. 25 June, still $12.99, now Churn Risk, at risk. 26 June, they order again:
 $34.97, VIP, active. By 31 December, same spend, back to Churn Risk. That evolution is the product."
@@ -202,22 +219,35 @@ $34.97, VIP, active. By 31 December, same spend, back to Churn Risk. That evolut
 | **Rollback** | Iceberg keeps earlier table versions; a bad load can be reversed |
 | **Audit trail** | every row carries its batch id; `ops.pipeline_runs` records each run's row counts and status |
 
+**A real example from this deployment (use it):** "When I first switched the DAG on, Airflow started a run for today's date. The data only covers 2023,
+so it loaded zero orders, and the data-quality step **failed the run** instead of publishing an empty result. That is the safety net doing its job."
+(If that red run is visible in Airflow, point at it.)
+
 **Say:** "A bad number should fail loudly, not appear quietly on a dashboard."
 
 ---
 
-## 8. Infrastructure, testing and cost (about 1.5 minutes)
+## 8. Building it for real: what the first deployment taught me (about 2 minutes)
 
 - **Infrastructure as code with AWS CDK (Python):** two stacks. `GlobalPartnersData` (KMS key, S3 lake bucket, artifacts bucket, Glue databases, Athena workgroup) and `GlobalPartnersPipeline`
   (network, RDS, Glue jobs, MWAA, dashboard, alerts). One command (`infra/up.sh`) deploys; one (`infra/down.sh`) deletes everything. Every resource is set to be removed with the stack.
 - **Local first:** the whole pipeline was built and tested on a laptop with Docker images of the same components AWS runs (SQL Server, Glue 5.1, the MWAA image, Streamlit). Only configuration differs.
 - **Tests:** **99 unit tests** (transformations, metrics, dashboard logic and pages) and **21 infrastructure tests** (for example: the dashboard role is read-only, nothing survives a delete). They run in **GitHub Actions** on every push and pull request.
 - **Process:** every change goes on a branch, passes CI, and is merged by pull request; nothing is pushed to `main` directly.
-- **Cost:** about **$0.42 per hour** while deployed (the always-on pieces: Airflow, the database, the NAT gateway, the load balancer, the dashboard container). Glue and Athena are per use and cost cents here.
-  The data is small (55 MB of source files). A single demo deployment is a few dollars; everything is deleted afterwards.
 
-**Say, the honest part (first deploy):** "The first deployment found two bugs the local tests could not: Airflow rejected a logging setting, and the dashboard image could not import its own package.
-Both were fixed on branches with new tests, and are in the repository history. That is the value of deploying early."
+**Say, the honest part:** "Deploying to the real cloud for the first time found things local tests could not. I fixed each on its own branch, with a test, and merged by pull request:"
+
+| What went wrong | Why | Fix |
+|---|---|---|
+| Airflow (MWAA) refused to be created | I had switched two log types off without giving them a log level, and the AWS API requires a level even for a switched-off log | set the level; added a test that every log module has one |
+| The dashboard page crashed with "No module named dashboard" | Streamlit only adds the script's own folder to Python's search path, not the project root. Locally the setup hid this | set `PYTHONPATH=/app` in the image; tested by loading the page inside the real ARM64 image |
+| Loading the whole year in one step hung | one huge database transaction on the smallest database size: it hit the one-hour limit, twice | loaded the year in chunks, each through the same DAG (`replay_until`); bigger chunks turned out faster per order |
+| A mistyped date (`2023-04-31`) failed three runs | April has 30 days; the job rejected the date before touching data | failed fast and cheaply; the lesson is to validate inputs where they are entered |
+
+**Say:** "That is the value of deploying early, and of making every failure loud and cheap."
+
+- **Cost:** about **$0.42 per hour** while deployed (the always-on pieces: Airflow, the database, the NAT gateway, the load balancer, the dashboard container). Glue and Athena are per use.
+  The whole demo day, including the failed attempts, cost roughly **$9** (estimate from run times; confirm on the AWS bill). Everything is deleted afterwards.
 
 ---
 
@@ -229,8 +259,9 @@ Say these yourself before the SME asks. It builds trust.
 |---|---|---|
 | Dashboard is **HTTP, limited to one IP**, not HTTPS | HTTPS needs a certificate for a domain name, and this project has none. This differs from the approved design; it is logged in `docs/decisions.md` | custom domain + certificate + company sign-in |
 | Database traffic trusts the server certificate | the RDS certificate authority is not in Glue's trust store | load the RDS certificate bundle into the job |
-| Single-zone database, no backups | demo cost | multi-AZ RDS, backups, point-in-time recovery |
-| No discount data, no location names | the source lacks them (SME confirmed) | add them if the source provides them; the model already has the discount columns' place |
+| Single-zone, smallest database, no backups | demo cost | multi-AZ, larger instance, backups, point-in-time recovery |
+| The "shops" are simulated | the source files are a static snapshot, so a replay job feeds them day by day | connect the real point-of-sale database |
+| No discount data, no location names | the source lacks them (SME confirmed) | add them if the source provides them; the model already has a place for the discount columns |
 | Deleted orders in the source are not detected | the incremental load only sees new and changed rows | SQL Server change data capture |
 | Assumptions Q3, Q8, Q10, Q11a, Q16 | not yet confirmed by the SME | each is one setting |
 
@@ -241,8 +272,9 @@ table maintenance (compaction), deployment from GitHub with short-lived credenti
 
 ## 10. Closing (about 30 seconds)
 
-**Say:** "In summary: a pipeline from SQL Server to a dashboard, with daily CLV, 25 automated quality checks, tested code, and infrastructure that I can create or delete with one command.
-It runs the same locally and on AWS, and it matches the reference numbers exactly. The remaining questions for you are the five assumptions listed in the design document."
+**Say:** "In summary: a pipeline from SQL Server to a dashboard, with daily CLV, 25 automated quality checks, tested code, and infrastructure I can create or delete with one command.
+It ran on AWS for the whole of 2023 and matches the reference numbers to the cent. The open questions for you are the five assumptions listed in the design document.
+Thank you."
 
 ---
 
@@ -281,8 +313,10 @@ It runs the same locally and on AWS, and it matches the reference numbers exactl
 | Why not equal-sized RFM groups? | most customers have 0 or 1 orders in 90 days, so equal groups are impossible, and fixed bands mean the same thing every day |
 | What if the SME's answer to an assumption differs? | change one setting in `business_rules.yaml` (or one rule) and rerun gold; the effect on 2023 is documented in the design (for example Q3: revenue $2,739.90, or 0.37 %, lower) |
 | What if a run fails at 3 am? | Airflow retries twice; if it still fails an SNS alert is sent; the dashboard keeps the last good data; the next run re-reads what was missed |
-| How do you know the AWS run is correct? | the same three days give the identical counts locally and on AWS, and 25 checks reconcile the layers |
+| How do you know the AWS result is correct? | the AWS tables match the reference computed from the raw files to the cent (orders, revenue, customers, CLV, snapshot rows), and 25 checks reconcile the layers |
+| Why 52,641 orders loaded but 52,015 counted? | 626 orders come from the test app, which is loaded but excluded from every metric (SME confirmed it is test data) |
+| How was a year loaded if the pipeline runs daily? | the same DAG, with an optional `replay_until` setting so one run can replay a range of days; normal daily runs are unchanged |
 | Why HTTP on the dashboard? | no domain, so no certificate; access is limited to one IP; production would use HTTPS and sign-in |
-| What does it cost to run? | about $0.42 per hour while deployed; deleted after the demo |
+| What does it cost to run? | about $0.42 per hour while deployed; roughly $9 for the whole demo day; deleted afterwards |
 | Is the loyalty effect real? | it is an association; we cannot prove cause from this data |
 | Where is each decision recorded? | `docs/decisions.md`, with the reason for each |
