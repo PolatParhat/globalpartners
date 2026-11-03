@@ -1,12 +1,14 @@
 # Status: GlobalPartners Business Insights Pipeline
-Updated: 2026-11-01 by Claude (Step 6 built; everything is ready up to the AWS deployment)
+Updated: 2026-11-03 by Claude (project closed: deployed, verified, video recorded, AWS deleted; tutorial started)
 
 ## Where we are
-Steps 1–5 are merged to main (PR #4 Step 5, PR #5 setup_source warning). The local Airflow run of 2026-11-01 is all green.
-**Step 6 (dashboard) is built and committed on branch `worktree-step-6-dashboard`**, worktree
-`.claude/worktrees/step-6-dashboard`. **The branch is not pushed and there is no PR yet** (the user merges via PR; say "open the PR").
-Step 4.9 + the dashboard's AWS part (Fargate + ALB) are written and tested as templates, **never deployed**.
-Remaining before the video: user reviews the dashboard → merge → single AWS deployment (Step 7).
+**The project is built, deployed once to AWS, verified and deleted.** All steps 1–7 are merged to main. On 2026-11-02 the full year 2023
+ran on AWS through the real Airflow DAG (6 runs, `replay_until` run setting): `dq_checks` 25/25, and Athena matches the local reference
+to the cent (52,015 orders, $746,223.86, 10,512 customers, CLV $673,614.04, snapshot 2,283,740 rows, 20 locations). The SME video was
+recorded (script: `docs/04_video/Video_Speaker_Notes.md`). `infra/down.sh` ran on 2026-11-03: no stacks, database, NAT gateway, load balancer
+or Airflow environment remain (checked); the KMS key is pending deletion (7 days, free). Estimated cost ≈ $9–10; confirm in Cost Explorer.
+Details and the three bugs found in the real deployment: `docs/decisions.md` (2026-11-02 and 2026-11-03).
+**Current phase: the tutorial** (`TUTORIAL.md`; chapter A1 Bash is ready in `tutorial/A01_bash/`). Code is frozen: bug fixes only.
 
 ## Step 6 in one paragraph
 `dashboard/` (Streamlit 1.66.1): 6 pages (segmentation/RFM, churn risk with a threshold alert list, sales trends + holidays +
@@ -16,48 +18,30 @@ New gold table `location_summary` (orders, revenue, customers, repeat customers 
 Sidebar "as of" date drives the customer pages (the snapshot has one row per customer per day). The discount page states the
 SME-confirmed limitation (no discounts in the data). Details and reasons: `docs/decisions.md` (2026-11-01 rows).
 
-## Verified (2026-11-01)
-- 99 unit tests pass (44 before + 55 new), 19 infra tests pass (11 + 8 new), `cdk synth` ok, pyflakes clean.
-- All 6 pages run headless (Streamlit AppTest) against a **full-year demo lake** (`scripts/build_demo_lake.py` → `lake_demo/`,
-  built from the raw CSVs, matches 2,283,740 snapshot rows) through the real Spark engine; numbers match the references:
-  10,512 customers, CLV $673,614, VIP 755, Churn Risk 7,693, churn 2,409 / 1,553 / 6,550, revenue $746,224, 52,015 orders, 20 restaurants.
-- `gold_metrics` + the metric DQ checks ran on a **copy** of the user's lake: SUCCESS, all PASS (the user's lake was not touched).
-- AWS dashboard image builds for ARM64 and runs (health 200, non-root); `up.sh` syntax ok; 8 queries parse as Athena SQL.
-- **NOT verified:** the Athena path against real Athena (only a stand-in for boto3), the Fargate/ALB deployment, the S3 path
-  `lake/gold.db/*` the task role may read (assumed from Iceberg's default location; if the dashboard gets AccessDenied on
-  the first deploy, check the table locations in the Glue console), and how the pages look in a browser (Claude cannot see them).
+## Verified on AWS (2026-11-02)
+- Full year 2023 through the real Airflow DAG; final `dq_checks` 25/25; Athena numbers identical to the local reference (see above).
+- All six dashboard pages worked on Fargate behind the ALB (HTTP, limited to one IP). 99 unit tests and 21 infra tests pass in CI.
+- Bugs found only by deploying (all fixed, with tests): MWAA log level required even for disabled modules (PR #8); dashboard
+  `PYTHONPATH=/app` (PR #9); `cleanup.py` order for the CDK bootstrap stack (PR #16, not yet run end to end).
+- Year-size replay in one run hung on the db.t3.micro; loaded in three chunks instead (root cause not investigated further).
 
 ## Next actions
-1. User: look at the dashboard. A preview container may be running on http://localhost:8501 (full-year demo data;
-   stop it with `docker rm -f gp-dashboard-preview`). Tell Claude what to change (layout, wording, charts).
-2. Open the PR for `worktree-step-6-dashboard` (Claude pushes the branch and runs `gh pr create` when the user says so), wait for CI green, user merges.
-3. After the merge, in the main folder: `docker compose build spark` (adds Streamlit), `docker compose up -d dashboard`,
-   then trigger a Airflow run (pick 06:00) so `gold_metrics` writes `gold.location_summary` and `dq_checks` shows 25/25.
-   Optional full-year data: `docker compose exec spark spark-submit scripts/build_demo_lake.py`, then
-   `DASHBOARD_WAREHOUSE=/home/hadoop/workspace/lake_demo docker compose up -d dashboard`.
-4. Step 7: the single AWS deployment. The user runs `infra/up.sh` (needs Docker running; ~45 min; costs ≈ $0.42/hour), then:
-   run the DAG 2–3× (replay days), open the DashboardUrl printed at the end, verify, Claude writes the video speaker notes
-   after a dry run, record, `infra/down.sh`. The 4.9 code and the Fargate/ALB/Athena parts have never run on AWS: expect first-deploy fixes.
-5. After the build: the full tutorial (see "Planned at the end of the build").
-
-## Planned at the end of the build
-- **Full tutorial + rebuild-by-hand (requested 2026-11-01):** after the deployment, Claude writes a very detailed tutorial in the repo
-  (chapter folder + `TUTORIAL.md` index with a progress checklist, one chapter per session, each chapter tested before it is given).
-  Part A: data-engineering concepts and every tool/library with practice exercises (Python and its libraries, SQL Server, Spark/PySpark,
-  Iceberg, Airflow, Docker, pytest, GitHub Actions, AWS services, CDK, Streamlit, Bash). Part B: rebuild this project by hand in the order a
-  developer grows code: one `main.py`, then functions, modules, the repo's layout, tests, DAG, infra, dashboard. The user types everything.
-  Freeze the code after Step 7 (bug fixes only) so chapters do not go stale. The 4.9 walkthrough files 13–14 (`cleanup.py`/`down.sh`,
-  infra tests + CI) fold into that tutorial.
-- Bash / command-line course (requested 2026-10-31) is part of Part A.
+1. User: Cost Explorer check (the bill lags many hours); merge this PR; edit the SME design document if they want it to say HTTP (it still says HTTPS).
+2. Tutorial, one chapter per session: start with A1 (`bash tutorial/A01_bash/make_sandbox.sh`, then `tutorial/A01_bash/README.md` and `exercises.md`).
+   Order and checklist: `TUTORIAL.md` (Part A concepts and tools, Part B rebuild by hand, Part C the ten production-hardening items).
+3. Resume bullets after Part C: what was built and deployed (a demo deployment built to production standard), described accurately.
 
 ## Open items
 - Old worktrees/branches that can be deleted (merged or declined): worktree-log-data-model-decisions, worktree-step-4.8-tests-ci,
   worktree-step-4.9-cdk, worktree-session-memory, worktree-step-5-metrics (branch `handoff-2026-11-01`, locked), practice/negative-price-test (local),
-  worktree-sqlserver-restart-policy (declined by the user).
-- The design document (`Step3_Solution_Design.md`, SME-approved) still says the dashboard is HTTPS; the build uses HTTP limited to one IP
-  (no domain, so no certificate). Recorded in `docs/decisions.md`; mention it in the video; the user decides whether to amend the document.
-- The scheduled Airflow runs of 30 and 31 Oct are `failed` in the local Airflow database; cause not investigated.
+  worktree-sqlserver-restart-policy (declined by the user), worktree-step-6-dashboard, fix-mwaa-log-level, fix-dashboard-pythonpath,
+  docs-video-speaker-notes, dag-replay-range, docs-video-notes-final, tutorial-skeleton, fix-cleanup-bootstrap-order.
+- The design document (`Step3_Solution_Design.md`, SME-approved) still says the dashboard is HTTPS; the build used HTTP limited to one IP
+  (no domain, so no certificate). Recorded in `docs/decisions.md`; the user decides whether to amend the document.
+- The DAG's `replay_until` accepts impossible dates such as 2023-04-31 (the job then fails fast); stricter validation offered, not built.
+- The scheduled local Airflow runs of 30 and 31 Oct are `failed` in the local Airflow database; cause not investigated.
 - SME assumptions still unconfirmed: Q3, Q8, Q10, Q11a, Q16 (see CLAUDE.md).
+- The AWS stack is deleted. To deploy again: `infra/up.sh` (about 45 minutes, about $0.42 per hour) and then `infra/down.sh`.
 
 ## Environment gotchas
 - **Never run `setup_source` on a stack that holds data**: script 02 DROPs `dbo.*` and `seed.*` and recreates them empty.
