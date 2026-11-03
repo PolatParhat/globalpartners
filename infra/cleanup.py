@@ -76,14 +76,8 @@ def empty_and_delete_bucket(bucket: str) -> None:
 
 def remove_bootstrap(account: str) -> None:
     cfn = client("cloudformation")
-    if stack_exists(BOOTSTRAP_STACK):
-        def delete_stack():
-            cfn.delete_stack(StackName=BOOTSTRAP_STACK)
-            cfn.get_waiter("stack_delete_complete").wait(StackName=BOOTSTRAP_STACK)
-        act(f"delete stack {BOOTSTRAP_STACK} (the CDK bootstrap)", delete_stack)
-    bucket = f"cdk-{QUALIFIER}-assets-{account}-{REGION}"
-    if bucket_exists(bucket):
-        act(f"empty and delete bucket {bucket}", lambda: empty_and_delete_bucket(bucket))
+    # Empty the repository and the bucket FIRST: CloudFormation cannot delete a container repository
+    # that still holds images, so deleting the stack first ended in DELETE_FAILED.
     repository = f"cdk-{QUALIFIER}-container-assets-{account}-{REGION}"
     ecr = client("ecr")
     try:
@@ -91,6 +85,14 @@ def remove_bootstrap(account: str) -> None:
         act(f"delete ECR repository {repository}", lambda: ecr.delete_repository(repositoryName=repository, force=True))
     except ecr.exceptions.RepositoryNotFoundException:
         pass
+    bucket = f"cdk-{QUALIFIER}-assets-{account}-{REGION}"
+    if bucket_exists(bucket):
+        act(f"empty and delete bucket {bucket}", lambda: empty_and_delete_bucket(bucket))
+    if stack_exists(BOOTSTRAP_STACK):
+        def delete_stack():
+            cfn.delete_stack(StackName=BOOTSTRAP_STACK)
+            cfn.get_waiter("stack_delete_complete").wait(StackName=BOOTSTRAP_STACK)
+        act(f"delete stack {BOOTSTRAP_STACK} (the CDK bootstrap)", delete_stack)
 
 
 # ---------------- checks ----------------
