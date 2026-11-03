@@ -4,8 +4,8 @@ Read this top to bottom while you share your screen. About 13 minutes at a calm 
 **SCREEN:** lines tell you what to have open. Everything else is spoken text, word for word.
 Meter is running at about $0.42 an hour, so do the setup below first, record in one go, then run `infra/down.sh`.
 
-**Setup (2 minutes, before recording):** open four browser tabs in this order: 1) the architecture diagram `docs/03_architecture/global-partner-pipeline-architecture.png`,
-2) Airflow (AWS console, MWAA, Open Airflow UI, DAG `globalpartners_daily`), 3) the dashboard link from `up.sh`, 4) AWS console, CloudFormation, `GlobalPartnersPipeline`, Resources.
+**Setup (2 minutes, before recording):** open six browser tabs in this order: 1) the architecture diagram `docs/03_architecture/global-partner-pipeline-architecture.png`,
+2) Airflow (AWS console, MWAA, Open Airflow UI, DAG `globalpartners_daily`), 3) the dashboard link from `up.sh`, 4) AWS console, CloudFormation, `GlobalPartnersPipeline`, Resources, 5) `config/business_rules.yaml`, 6) GitHub: the Actions tab and the pull requests list.
 Zoom the browser to 125 %. Hide the account number, your email and your IP. Close Slack and mail.
 
 ---
@@ -26,7 +26,7 @@ The scope is orders from 2023, as you confirmed.
 
 ## 2. The data and the rules
 
-**SCREEN:** stay on the diagram.
+**SCREEN:** tab 5, `config/business_rules.yaml` (open it on GitHub or in your editor). Scroll slowly as you name each rule.
 
 Before building anything, I analyzed the source files and wrote down every decision. You approved the design on the 14th of October.
 
@@ -106,7 +106,7 @@ Everything you see on AWS was created from code by one command: the network, the
 
 ## 6. Proof that the result is correct
 
-**SCREEN:** stay on Airflow or the CloudFormation tab. Say this slowly.
+**SCREEN:** tab 3, the dashboard. Point at the totals on the first page and on Sales trends as you say each figure. Say this slowly.
 
 I did not just trust the load. I counted the result in Athena and compared it with a reference I calculated directly from the raw files.
 
@@ -152,7 +152,7 @@ One more point: the loyalty card number stays in silver and never reaches gold o
 
 ## 9. Quality and failure handling
 
-**SCREEN:** stay on the dashboard, or show the Airflow runs.
+**SCREEN:** tab 2, Airflow. Open the latest run and the log of the `dq_checks` task, where the checks are listed.
 
 A bad number should fail loudly, not appear quietly on a dashboard. So the pipeline has several protections.
 
@@ -164,7 +164,7 @@ I saw this working for real. When I first switched the pipeline on, Airflow star
 
 ## 10. What the first real deployment taught me
 
-**SCREEN:** stay wherever you are; no screen needed.
+**SCREEN:** tab 6, the GitHub repository's Actions tab (green runs) and the pull requests list.
 
 The whole pipeline was first built and tested on my laptop with Docker images of the same components AWS runs. There are 99 unit tests and 21 infrastructure tests, and they run in GitHub Actions on every change. Every change goes through a branch and a pull request.
 
